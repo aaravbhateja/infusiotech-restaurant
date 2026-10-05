@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -13,6 +13,7 @@ import Animated, {
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 
 import { Logo } from '@/components/Logo';
+import { Wordmark } from '@/components/Wordmark';
 import { fonts } from '@/theme/tokens';
 
 const BG = '#120F0E';
@@ -125,12 +126,8 @@ export function BrandSplash() {
       </View>
 
       <View style={styles.words}>
-        {/* A pre-rendered image, not Text: iOS kept cutting off the last
-            letter of "Blink" and "Rest" when drawing this display font with
-            tight letter spacing, however the Text was sized. Regenerate with
-            scripts/render-wordmark.py if the wordmark changes. */}
         <Animated.View style={rise1}>
-          <Image source={require('../../assets/images/wordmark.png')} style={styles.wordmark} accessibilityLabel="BlinkRest" />
+          <Wordmark height={40} />
         </Animated.View>
         <Animated.View style={[styles.taglineRow, rise2]}>
           <LinearGradient colors={['rgba(201,189,182,0)', 'rgba(201,189,182,0.6)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.rule} />
@@ -172,7 +169,6 @@ const styles = StyleSheet.create({
   icon: { width: ICON, height: ICON, borderRadius: 28, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)' },
   shine: { position: 'absolute', top: -30, left: 0, width: 44, height: 180 },
   words: { marginTop: 56, alignItems: 'center', gap: 16 },
-  wordmark: { width: 205, height: 43 },
   taglineRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   rule: { width: 28, height: 1 },
   tagline: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 4, color: '#C9BDB6' },
