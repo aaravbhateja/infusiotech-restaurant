@@ -69,6 +69,15 @@
           "savePhotosPermission": "Let BlinkRest save table QR codes to your photos.",
           "granularPermissions": ["photo"]
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36
+          }
+        }
       ]
     ],
     "experiments": {
