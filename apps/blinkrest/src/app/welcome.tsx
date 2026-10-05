@@ -61,6 +61,12 @@ export default function Welcome() {
           >
             Joining a team? <Text style={{ color: colors.coral600, textDecorationLine: 'underline' }}>Use your invite</Text>
           </Text>
+          <Text style={{ textAlign: 'center', fontSize: 12, color: colors.ink500, fontFamily: fonts.body }}>
+            By continuing you agree to our{' '}
+            <Text onPress={() => router.push('/privacy' as never)} style={{ color: colors.ink700, fontFamily: fonts.bodyBold, textDecorationLine: 'underline' }}>
+              Privacy Policy
+            </Text>
+          </Text>
         </View>
       </View>
     </SafeAreaView>

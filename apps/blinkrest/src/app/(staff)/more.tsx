@@ -31,11 +31,13 @@ const TILES: { label: string; sub: string; icon: IconName; bg: string; fg: strin
   { label: 'Branding', sub: 'Menu colours', icon: 'sparkle', bg: '#FFE4DA', fg: colors.coral700, permission: 'menu.branding.manage' },
 ];
 
-const ROWS: { label: string; icon: IconName; permission?: string }[] = [
+const ROWS: { label: string; icon: IconName; permission?: string; danger?: boolean }[] = [
   { label: 'Notifications', icon: 'bell' },
   { label: 'Subscription', icon: 'crown', permission: 'subscription.manage' },
   { label: 'Settings', icon: 'settings', permission: 'settings.manage' },
   { label: 'Help & support', icon: 'help' },
+  { label: 'Privacy policy', icon: 'shield' },
+  { label: 'Delete account', icon: 'trash', danger: true },
 ];
 
 export default function More() {
@@ -175,6 +177,8 @@ export default function More() {
                   else if (r.label === 'Settings') router.push('/(staff)/settings' as never);
                   else if (r.label === 'Subscription') router.push('/(staff)/subscription' as never);
                   else if (r.label === 'Help & support') router.push('/(staff)/support' as never);
+                  else if (r.label === 'Privacy policy') router.push('/privacy' as never);
+                  else if (r.label === 'Delete account') router.push('/(staff)/settings/delete-account' as never);
                   else comingSoon(r.label);
                 }}
                 style={{
@@ -187,8 +191,8 @@ export default function More() {
                   borderBottomColor: '#F4ECE6',
                 }}
               >
-                <Icon name={r.icon} size={21} color={colors.ink700} />
-                <Text style={{ flex: 1, fontSize: 15, fontFamily: fonts.bodyBold, color: colors.ink900 }}>{r.label}</Text>
+                <Icon name={r.icon} size={21} color={r.danger ? colors.error : colors.ink700} />
+                <Text style={{ flex: 1, fontSize: 15, fontFamily: fonts.bodyBold, color: r.danger ? colors.error : colors.ink900 }}>{r.label}</Text>
                 <Icon name="right" size={18} stroke={2.2} color="#B9AEA8" />
               </Pressable>
             ))}

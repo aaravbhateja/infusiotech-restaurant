@@ -18,6 +18,7 @@ Guests scan a QR code on their table, browse the menu, order and pay from their 
 - [Architecture](#architecture)
 - [Roles and permissions](#roles-and-permissions)
 - [Online payments, KYC and the 97/3 split](#online-payments-kyc-and-the-973-split)
+- [Account deletion and privacy](#account-deletion-and-privacy)
 - [Getting started (local development)](#getting-started-local-development)
 - [Backend setup (Supabase)](#backend-setup-supabase)
 - [Deployment](#deployment)
@@ -75,6 +76,7 @@ Guests scan a QR code on their table, browse the menu, order and pay from their 
 - **Settings:** profile, logo/cover photo, business hours, GST, menu colours, order settings, security
 - **Multi-restaurant:** one person can belong to several restaurants and switch between them
 - Push notifications, offline banner, receipt printing/sharing
+- **Account deletion** (More → Delete account) for every role, plus a public privacy policy at `/privacy` and a deletion-instructions page at `/account-deletion` (both required for store listings). See [Account deletion](#account-deletion-and-privacy).
 - Animated branded splash screen
 
 ### Platform admin console (`/admin`)
@@ -224,6 +226,19 @@ The full **Aadhar number is never stored**: only the last 4 digits (for display)
 
 ---
 
+## Account deletion and privacy
+
+Both app stores require in-app account deletion and a public privacy policy.
+
+- **In the app:** *More → Delete account*, open to every role. It shows what will happen, then asks the person to type `DELETE`. It calls the `delete_my_account` database function, which runs in one transaction (`supabase/migrations/0052_account_deletion.sql`).
+- **What is erased:** the login, profile, memberships, push tokens, permission overrides and shifts.
+- **What is kept:** orders, payments, invoices, offers, support tickets and audit events. Their reference to the deleted person is set to null, because a restaurant's tax and accounting records can't vanish when someone leaves.
+- **Sole owners:** an owner with no other active staff closes the restaurant with them: ordering stops, QR codes are revoked, the subscription is cancelled, and KYC/bank details, pending invitations and guest names/phones/emails are erased. An owner whose restaurant still has active staff is refused until the team is removed. Platform admins can't self-delete.
+- **Public pages:** `/privacy` and `/account-deletion` (`src/app/privacy.tsx`, `src/app/account-deletion.tsx`). They work signed out, and Play Console's "delete account URL" points at the second. Contact details live in `src/lib/contact.ts`.
+- The policy text was drafted from what the app actually does. Keep it in step with the code, and have counsel review it before launch.
+
+---
+
 ## Getting started (local development)
 
 ### Prerequisites
@@ -319,7 +334,7 @@ vercel deploy --prod
 
 `vercel.json` already sets the build (`npx expo export -p web` → `dist`) and the URL rewrites for dynamic routes such as `/order/:token`. Production environment variables live on the Vercel project (`vercel env ls`), not in `.env`.
 
-> If you add a new screen, also add a rewrite for it in `vercel.json`. Otherwise, opening that URL directly or refreshing the browser on it returns a 404 on the web. `/settings/payments-kyc`, `/settings/branding` and `/admin/kyc` currently need entries.
+> If you add a new screen, also add a rewrite for it in `vercel.json`. Otherwise, opening that URL directly or refreshing the browser on it returns a 404 on the web.
 
 ### Native apps → EAS
 
@@ -378,7 +393,6 @@ Run both before pushing.
 - **Item variants and add-ons** (sizes, extras) exist in the database and are priced correctly on the server, but there's no screen to create them yet, and the guest menu doesn't offer them.
 - **Rate limiting** on public endpoints (order creation, table lookup) isn't implemented yet; add it at the edge before launch.
 - **`menu.price.edit` / `menu.availability.edit`** exist as permission keys but menu writes are still gated on `menu.edit` as a whole.
-- **Vercel rewrites** are missing for a few newer screens (see [Deployment](#deployment)).
 - **`DEPLOYMENT.md` is partly out of date.** It still says Razorpay checkout, tax, analytics, the admin console and image uploads aren't built (they are), and references an old `/api/v1/webhooks/razorpay` URL. This README is the current source of truth.
 
 ---

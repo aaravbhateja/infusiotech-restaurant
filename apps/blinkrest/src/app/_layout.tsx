@@ -88,6 +88,8 @@ function AppGate({ fontsLoaded, splashMinElapsed }: { fontsLoaded: boolean; spla
         <Stack.Screen name="admin-login" />
         <Stack.Screen name="admin" />
         <Stack.Screen name="(staff)" />
+        <Stack.Screen name="privacy" />
+        <Stack.Screen name="account-deletion" />
         <Stack.Screen name="order/[token]" />
         <Stack.Screen name="r/[slug]/[table]" />
       </Stack>
