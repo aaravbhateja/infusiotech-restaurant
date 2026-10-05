@@ -143,6 +143,7 @@ export function PublicOrderScreen({ token, previewTenantId, onBack }: { token?: 
   const [submittingReview, setSubmittingReview] = useState(false);
   const [callingWaiter, setCallingWaiter] = useState(false);
   const [waiterCalled, setWaiterCalled] = useState(false);
+  const [billRequested, setBillRequested] = useState(false);
 
   const [attempt, setAttempt] = useState(0);
 
@@ -459,13 +460,18 @@ export function PublicOrderScreen({ token, previewTenantId, onBack }: { token?: 
     );
   }
 
-  async function callWaiter() {
-    if (isPreview || callingWaiter || waiterCalled) return;
+  // 'help' is the plain "Call waiter" button during the meal; 'bill' only
+  // appears once the order is served. Tracked separately so asking for help
+  // earlier doesn't make the bill button look like it was already pressed.
+  async function callWaiter(kind: 'help' | 'bill') {
+    const alreadyCalled = kind === 'bill' ? billRequested : waiterCalled;
+    if (isPreview || callingWaiter || alreadyCalled) return;
     if (!guardOnline(isOnline)) return;
     setCallingWaiter(true);
     try {
       await callFn('call-waiter', { token });
-      setWaiterCalled(true);
+      if (kind === 'bill') setBillRequested(true);
+      else setWaiterCalled(true);
     } catch {
       Alert.alert('Could not reach staff', 'Please try again in a moment.');
     } finally {
@@ -512,7 +518,11 @@ export function PublicOrderScreen({ token, previewTenantId, onBack }: { token?: 
         ) : (
           <Animated.View entering={FadeInDown} style={{ paddingTop: Math.max(insets.top + 24, 44), paddingHorizontal: 24, paddingBottom: 8, alignItems: 'center', gap: 4 }}>
             <Text style={{ fontSize: 26, fontFamily: fonts.display, color: colors.ink900, textAlign: 'center' }}>Order placed!</Text>
-            <Text style={{ fontSize: 14, color: colors.ink700, textAlign: 'center' }}>A waiter will bring your bill for {formatMinor(confirmation.total_minor)} to the table.</Text>
+            <Text style={{ fontSize: 14, color: colors.ink700, textAlign: 'center' }}>
+              {isServed
+                ? `Enjoy your meal! Call a waiter when you're ready to pay ${formatMinor(confirmation.total_minor)}.`
+                : `You'll pay ${formatMinor(confirmation.total_minor)} at the table once your order is served.`}
+            </Text>
           </Animated.View>
         )}
 
@@ -528,20 +538,20 @@ export function PublicOrderScreen({ token, previewTenantId, onBack }: { token?: 
             <View style={{ backgroundColor: colors.ink900, borderRadius: 28, padding: 20, alignItems: 'center', gap: 10 }}>
               <View style={{ height: 26, paddingHorizontal: 10, borderRadius: radius.pill, backgroundColor: colors.saffron400, flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                 <Icon name="bell" size={13} stroke={2.3} color={colors.ink900} />
-                <Text style={{ fontSize: 11, fontFamily: fonts.bodyExtraBold, color: colors.ink900, letterSpacing: 0.5 }}>CALL WAITER FOR BILL</Text>
+                <Text style={{ fontSize: 11, fontFamily: fonts.bodyExtraBold, color: colors.ink900, letterSpacing: 0.5 }}>{isServed ? 'CALL WAITER FOR BILL' : 'PAY AFTER YOUR MEAL'}</Text>
               </View>
               <Text style={{ fontSize: 48, fontFamily: fonts.display, color: '#FFFFFF' }}>#{confirmation.order_number}</Text>
               <Text style={{ fontSize: 14, color: '#E9E1DC' }}>{info.table.label} · {formatMinor(confirmation.total_minor)} to pay</Text>
             </View>
           ) : null}
 
-          {!isPaid && !waiterCalled ? (
+          {isServed && !isPaid && !billRequested ? (
             <Button
               title={callingWaiter ? 'Calling…' : "Call waiter for bill"}
-              onPress={callWaiter}
+              onPress={() => callWaiter('bill')}
               loading={callingWaiter}
             />
-          ) : !isPaid && waiterCalled ? (
+          ) : isServed && !isPaid && billRequested ? (
             <Animated.View entering={FadeInDown} style={{ borderRadius: radius.lg, backgroundColor: colors.successBg, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <Icon name="checkc" size={22} color={colors.success} />
               <Text style={{ fontSize: 14, fontFamily: fonts.bodyExtraBold, color: colors.success, flex: 1 }}>Noted — a waiter is on the way with your bill.</Text>
@@ -571,7 +581,7 @@ export function PublicOrderScreen({ token, previewTenantId, onBack }: { token?: 
 
           {!isServed && !isPreview && info.table.id ? (
             <Pressable
-              onPress={callWaiter}
+              onPress={() => callWaiter('help')}
               disabled={callingWaiter || waiterCalled}
               style={{ height: 52, borderRadius: radius.pill, borderWidth: 1.5, borderColor: waiterCalled ? '#8FD3AE' : colors.inputBorder, backgroundColor: waiterCalled ? colors.successBg : colors.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
             >

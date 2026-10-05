@@ -42,6 +42,14 @@ const NEXT_STEP: Record<string, { status: string; label: string; icon: IconName;
 
 const FILTERS = ['all', 'new', 'accepted', 'preparing', 'ready', 'served', 'rejected', 'cancelled'] as const;
 
+const PAYMENT_LABELS: Record<string, string> = {
+  paid: 'Paid online',
+  cash_received: 'Cash received',
+  reconciled: 'Reconciled',
+  refunded: 'Refunded',
+  pending: 'Payment pending',
+};
+
 function timeAgo(iso: string) {
   const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
   if (mins < 1) return 'Just now';
@@ -247,11 +255,11 @@ function OrdersScreen() {
                   </Text>
                   {item.payment_status === 'unpaid' ? (
                     <View style={{ alignSelf: 'flex-start', height: 22, paddingHorizontal: 8, borderRadius: radius.pill, borderWidth: 1.5, borderColor: '#E0B860', borderStyle: 'dashed', justifyContent: 'center' }}>
-                      <Text style={{ fontSize: 11, fontFamily: fonts.bodyExtraBold, color: '#8A5A00' }}>₹ Pay at counter</Text>
+                      <Text style={{ fontSize: 11, fontFamily: fonts.bodyExtraBold, color: '#8A5A00' }}>₹ Cash to be collected</Text>
                     </View>
                   ) : (
                     <View style={{ alignSelf: 'flex-start', height: 22, paddingHorizontal: 8, borderRadius: radius.pill, borderWidth: 1.5, borderColor: '#8FD3AE', justifyContent: 'center' }}>
-                      <Text style={{ fontSize: 11, fontFamily: fonts.bodyExtraBold, color: colors.success }}>₹ {item.payment_status}</Text>
+                      <Text style={{ fontSize: 11, fontFamily: fonts.bodyExtraBold, color: colors.success }}>₹ {PAYMENT_LABELS[item.payment_status] ?? item.payment_status}</Text>
                     </View>
                   )}
                 </View>
