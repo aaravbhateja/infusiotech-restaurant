@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "633969311653",
+    "project_id": "blinkrest-309b4",
+    "storage_bucket": "blinkrest-309b4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:633969311653:android:78647f40dab2a6661ff24c",
+        "android_client_info": {
+          "package_name": "com.infusiotech.blinkrest"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAVNuTCdYg8Ht_dG_hL8KXBsPRmLbphI-g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
