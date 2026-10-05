@@ -125,13 +125,16 @@ export function BrandSplash({ fontsReady = true }: { fontsReady?: boolean }) {
       </View>
 
       <View style={styles.words}>
-        {/* Two sibling Texts, not one nested Text: iOS mis-measures nested
-            runs with negative letterSpacing and clips the last glyph. Keyed
-            on fontsReady: iOS keeps the width it measured with the narrower
-            fallback font when the custom font arrives, cutting off "Rest". */}
-        <Animated.View key={fontsReady ? 'fonts' : 'fallback'} style={[styles.wordRow, rise1]}>
-          <Text allowFontScaling={false} numberOfLines={1} style={[styles.wordmark, { color: '#FFFFFF' }]}>Blink</Text>
-          <Text allowFontScaling={false} numberOfLines={1} style={[styles.wordmark, { color: ORANGE }]}>Rest</Text>
+        {/* iOS under-measures this heavy display font, so a Text sized to its
+            content got clipped ("BlinRes") or ellipsised ("Bl… R…"). The box
+            is a fixed width far wider than the word, with the text centred
+            in it, so its size never depends on that measurement. Keyed on
+            fontsReady so it lays out again once the custom font arrives. */}
+        <Animated.View key={fontsReady ? 'fonts' : 'fallback'} style={[styles.wordBox, rise1]}>
+          <Text allowFontScaling={false} style={styles.wordmark}>
+            <Text style={{ color: '#FFFFFF' }}>Blink</Text>
+            <Text style={{ color: ORANGE }}>Rest</Text>
+          </Text>
         </Animated.View>
         <Animated.View style={[styles.taglineRow, rise2]}>
           <LinearGradient colors={['rgba(201,189,182,0)', 'rgba(201,189,182,0.6)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.rule} />
@@ -173,12 +176,8 @@ const styles = StyleSheet.create({
   icon: { width: ICON, height: ICON, borderRadius: 28, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)' },
   shine: { position: 'absolute', top: -30, left: 0, width: 44, height: 180 },
   words: { marginTop: 56, alignItems: 'center', gap: 16 },
-  wordRow: { flexDirection: 'row', alignItems: 'baseline', paddingHorizontal: 8 },
-  // iOS shrinks each Text's frame by the negative letterSpacing on every
-  // character (including the last) and then clips the glyph that overflows
-  // it. The right padding gives that overflow room; the matching negative
-  // margin keeps "Blink" and "Rest" visually joined, as designed.
-  wordmark: { fontFamily: fonts.display, fontSize: 44, letterSpacing: -1.2, lineHeight: 52, paddingRight: 10, marginRight: -10 },
+  wordBox: { width: 320, maxWidth: '100%' },
+  wordmark: { width: '100%', textAlign: 'center', fontFamily: fonts.display, fontSize: 44, letterSpacing: -1, lineHeight: 54 },
   taglineRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   rule: { width: 28, height: 1 },
   tagline: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 4, color: '#C9BDB6' },
