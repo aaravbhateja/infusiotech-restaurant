@@ -46,7 +46,7 @@ function PaymentsKycScreen() {
 
   const load = useCallback(async () => {
     const { data } = await supabase.rpc('get_tenant_kyc');
-    setKyc(data ?? { status: 'pending', pay_online_enabled: false });
+    setKyc(data ? { ...data, status: data.status ?? 'pending' } : { status: 'pending', pay_online_enabled: false });
     setLegalBusinessName(data?.legal_business_name ?? '');
     setLoading(false);
   }, []);
@@ -103,7 +103,7 @@ function PaymentsKycScreen() {
     );
   }
 
-  const status = STATUS_COPY[kyc.status];
+  const status = STATUS_COPY[kyc.status] ?? STATUS_COPY.pending;
   const canResubmit = kyc.status === 'pending' || kyc.status === 'rejected';
 
   return (
