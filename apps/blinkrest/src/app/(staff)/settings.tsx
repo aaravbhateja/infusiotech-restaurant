@@ -11,7 +11,9 @@ import { menuImageUrl } from '@/lib/menuImage';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts } from '@/theme/tokens';
 
-type Row = { label: string; sub: string; icon: IconName; bg: string; fg: string; route?: string };
+// route is required on purpose: every row must lead somewhere real. A row
+// with no destination ("coming soon") is grounds for store-review rejection.
+type Row = { label: string; sub: string; icon: IconName; bg: string; fg: string; route: string };
 
 const GROUPS: { title: string; rows: Row[] }[] = [
   {
@@ -31,14 +33,13 @@ const GROUPS: { title: string; rows: Row[] }[] = [
       { label: 'Order settings', sub: 'Auto-accept, SLA, KOT printing', icon: 'orders', bg: '#EAF1FF', fg: '#1F5BD6', route: '/(staff)/settings/orders' },
       { label: 'Table settings', sub: 'Manage tables and areas', icon: 'tables', bg: '#EAF1FF', fg: '#1F5BD6', route: '/(staff)/tables' },
       { label: 'QR codes', sub: 'Download, reprint, or rotate table codes', icon: 'qr', bg: '#EAF1FF', fg: '#1F5BD6', route: '/(staff)/tables' },
-      { label: 'Printers', sub: 'Kitchen + counter · Bluetooth', icon: 'printer', bg: '#EAF1FF', fg: '#1F5BD6' },
     ],
   },
   {
     title: 'MONEY',
     rows: [
       { label: 'Tax settings', sub: 'GST rate for new orders', icon: 'percent', bg: colors.successBg, fg: colors.success, route: '/(staff)/settings/profile' },
-      { label: 'Payment settings', sub: 'Transactions, refunds, reconciliation', icon: 'card', bg: colors.successBg, fg: colors.success, route: '/(staff)/payments' },
+      { label: 'Payment settings', sub: 'Transactions and reconciliation', icon: 'card', bg: colors.successBg, fg: colors.success, route: '/(staff)/payments' },
       { label: 'Online payments & KYC', sub: 'Submit PAN, Aadhar & bank details to accept online payments', icon: 'shield', bg: colors.successBg, fg: colors.success, route: '/(staff)/settings/payments-kyc' },
       { label: 'Subscription', sub: 'Plan, billing', icon: 'crown', bg: colors.successBg, fg: colors.success, route: '/(staff)/subscription' },
     ],
@@ -80,13 +81,7 @@ function SettingsScreen() {
   }, [load]);
 
   function go(row: Row) {
-    if (row.route) router.push(row.route as never);
-    else if (row.label === 'Printers') {
-      Alert.alert(
-        'Printers',
-        'Bluetooth/network printer pairing needs a custom development build — it is not available inside Expo Go. Build one with "eas build --profile development" to set this up.',
-      );
-    } else Alert.alert(row.label, 'This section is coming soon.');
+    router.push(row.route as never);
   }
 
   async function toggleAccepting() {

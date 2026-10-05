@@ -18,10 +18,10 @@ const ACTIONS: { kind: Kind; label: string; sub: string; icon: IconName; bg: str
 ];
 
 const FAQS: { q: string; a: string }[] = [
-  { q: 'How do I print KOTs automatically?', a: 'Settings › Printers › Kitchen printer, then turn on "Print KOT when an order is accepted". Each item prints at its station.' },
   { q: 'Can I pause orders during a rush?', a: 'Yes. Settings › Accepting orders. QR guests see a friendly "kitchen is busy" message until you turn it back on.' },
-  { q: 'How do UPI refunds work?', a: "Refunds go back to the customer's UPI account, usually within minutes. You can track each one in Payments › Refunds." },
+  { q: 'How do I get a table’s QR code?', a: 'Open Tables, tap a table, then New QR. The old code stops working as soon as you make a new one, so reprint it for that table.' },
   { q: 'How do I add a staff member?', a: 'More › Staff › Invite. Pick a role template; you can fine-tune permissions before sending the invite.' },
+  { q: 'How do I delete my account?', a: 'More › Delete account. You can read what will be erased before you confirm. See our Privacy Policy under More for the details.' },
 ];
 
 const STATUS_STYLE: Record<string, { bg: string; fg: string; label: string }> = {

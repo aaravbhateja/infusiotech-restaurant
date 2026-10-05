@@ -6,6 +6,12 @@ apps/blinkrest/authconfig.json
 apps/blinkrest/authconfig2.json
 apps/blinkrest/patch_auth.js
 
+# Service-account / admin keys (e.g. the Firebase key for push notifications,
+# the Google Play API key) — real secrets, upload them to EAS instead
+*firebase-adminsdk*.json
+*service-account*.json
+*serviceAccount*.json
+
 # Claude Code local lock files
 .claude/scheduled_tasks.lock
 
