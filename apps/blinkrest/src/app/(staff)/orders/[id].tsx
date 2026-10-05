@@ -1,0 +1,283 @@
+import { router, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import { Alert, ScrollView, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { BillPreviewSheet } from '@/components/BillPreviewSheet';
+import { Button } from '@/components/Button';
+import { RequireAccess } from '@/components/RequireAccess';
+import { TextField } from '@/components/TextField';
+import { useAuth } from '@/hooks/useAuth';
+import { useIsOnline } from '@/hooks/useIsOnline';
+import { guardOnline } from '@/lib/offline';
+import { supabase } from '@/lib/supabase';
+import { colors, fonts, formatMinor, radius, statusBadge } from '@/theme/tokens';
+
+type OrderItem = {
+  id: string;
+  item_name_snapshot: string;
+  quantity: number;
+  line_total_minor: number;
+  variant_snapshot: { name: string }[];
+  addon_snapshot: { name: string }[];
+};
+
+type OrderDetailData = {
+  id: string;
+  order_number: string;
+  order_status: string;
+  payment_status: string;
+  total_minor: number;
+  currency: string;
+  created_at: string;
+  table: { label: string } | null;
+  items: OrderItem[];
+};
+
+const NEXT_STEP: Record<string, { status: string; label: string; permission: string } | undefined> = {
+  new: { status: 'accepted', label: 'Accept order', permission: 'orders.accept' },
+  accepted: { status: 'preparing', label: 'Start preparing', permission: 'orders.prepare' },
+  preparing: { status: 'ready', label: 'Mark ready', permission: 'orders.prepare' },
+  ready: { status: 'served', label: 'Mark served', permission: 'orders.serve' },
+};
+
+type DiscountRequest = { id: string; amount_minor: number; reason: string; status: string };
+
+function OrderDetailScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { membership } = useAuth();
+  const isOnline = useIsOnline();
+  const [order, setOrder] = useState<OrderDetailData | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [billOpen, setBillOpen] = useState(false);
+  const [discountRequest, setDiscountRequest] = useState<DiscountRequest | null>(null);
+  const [requestingDiscount, setRequestingDiscount] = useState(false);
+  const [discountAmount, setDiscountAmount] = useState('');
+  const [discountReason, setDiscountReason] = useState('');
+  const [submittingDiscount, setSubmittingDiscount] = useState(false);
+
+  const load = useCallback(async () => {
+    const { data } = await supabase
+      .from('orders')
+      .select(
+        'id, order_number, order_status, payment_status, total_minor, currency, created_at, table:restaurant_tables(label), items:order_items(id, item_name_snapshot, quantity, line_total_minor, variant_snapshot, addon_snapshot)',
+      )
+      .eq('id', id)
+      .single();
+    setOrder(data as unknown as OrderDetailData);
+
+    const { data: dr } = await supabase
+      .from('discount_requests')
+      .select('id, amount_minor, reason, status')
+      .eq('order_id', id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setDiscountRequest(dr);
+  }, [id]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
+    load();
+  }, [load]);
+
+  async function transition(status: string, reason?: string) {
+    if (!guardOnline(isOnline)) return;
+    setBusy(true);
+    const { error } = await supabase.rpc('transition_order_status', {
+      p_order_id: id,
+      p_new_status: status,
+      p_reason: reason ?? null,
+    });
+    setBusy(false);
+    if (error) {
+      Alert.alert('Could not update order', error.message);
+      return;
+    }
+    await load();
+  }
+
+  function confirmReject() {
+    Alert.prompt?.(
+      'Reject order',
+      'Reason for rejecting this order:',
+      (reason) => {
+        if (reason?.trim()) transition('rejected', reason.trim());
+      },
+    ) ?? transition('rejected', 'Rejected by staff');
+  }
+
+  async function recordCash() {
+    if (!guardOnline(isOnline)) return;
+    setBusy(true);
+    const { error } = await supabase.rpc('record_cash_payment', { p_order_id: id });
+    setBusy(false);
+    if (error) {
+      Alert.alert('Could not record payment', error.message);
+      return;
+    }
+    await load();
+  }
+
+  async function submitDiscountRequest() {
+    const amountMinor = Math.round(parseFloat(discountAmount || '0') * 100);
+    if (amountMinor <= 0 || !discountReason.trim()) return;
+    if (!guardOnline(isOnline)) return;
+    setSubmittingDiscount(true);
+    const { error } = await supabase.rpc('request_discount', { p_order_id: id, p_amount_minor: amountMinor, p_reason: discountReason.trim() });
+    setSubmittingDiscount(false);
+    if (error) {
+      Alert.alert('Could not request discount', error.message);
+      return;
+    }
+    setRequestingDiscount(false);
+    setDiscountAmount('');
+    setDiscountReason('');
+    await load();
+  }
+
+  if (!order) {
+    return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
+  }
+
+  const badge = statusBadge[order.order_status] ?? statusBadge.new;
+  const nextStep = NEXT_STEP[order.order_status];
+  const next = nextStep && (membership?.permissions.has(nextStep.permission) || membership?.permissions.has('orders.status.update')) ? nextStep : undefined;
+
+  return (
+    <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: colors.bg }}>
+    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: 24, gap: 20 }}>
+      <Text onPress={() => router.back()} style={{ fontFamily: fonts.bodyBold, color: colors.coral600 }}>
+        ← Back
+      </Text>
+
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <View style={{ gap: 4 }}>
+          <Text style={{ fontSize: 28, fontFamily: fonts.display, color: colors.ink900 }}>
+            #{order.order_number}
+          </Text>
+          <Text style={{ fontFamily: fonts.body, color: colors.ink700 }}>
+            {order.table?.label ?? 'No table'} ·{' '}
+            {new Date(order.created_at).toLocaleString([], { hour: '2-digit', minute: '2-digit' })}
+          </Text>
+        </View>
+        <View style={{ backgroundColor: badge.bg, borderRadius: radius.pill, paddingHorizontal: 12, height: 30, justifyContent: 'center' }}>
+          <Text style={{ fontSize: 13, fontFamily: fonts.bodyExtraBold, color: badge.fg }}>{badge.label}</Text>
+        </View>
+      </View>
+
+      <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, padding: 16, gap: 12, borderWidth: 1, borderColor: colors.line }}>
+        {order.items.map((item) => (
+          <View key={item.id} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontFamily: fonts.bodyBold, color: colors.ink900 }}>
+                {item.quantity}× {item.item_name_snapshot}
+              </Text>
+              {[...item.variant_snapshot, ...item.addon_snapshot].map((v, i) => (
+                <Text key={i} style={{ fontSize: 12, color: colors.ink500, fontFamily: fonts.body }}>
+                  {v.name}
+                </Text>
+              ))}
+            </View>
+            <Text style={{ fontFamily: fonts.bodyBold, color: colors.ink900 }}>
+              {formatMinor(item.line_total_minor, order.currency)}
+            </Text>
+          </View>
+        ))}
+        <View style={{ height: 1, backgroundColor: colors.line }} />
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          <Text style={{ fontFamily: fonts.display, fontSize: 18, color: colors.ink900 }}>Total</Text>
+          <Text style={{ fontFamily: fonts.display, fontSize: 18, color: colors.ink900 }}>
+            {formatMinor(order.total_minor, order.currency)}
+          </Text>
+        </View>
+      </View>
+
+      {membership?.permissions.has('orders.status.update') && !['rejected', 'cancelled'].includes(order.order_status) ? (
+        discountRequest?.status === 'pending' ? (
+          <View style={{ backgroundColor: colors.saffron50, borderRadius: radius.lg, padding: 16, gap: 4 }}>
+            <Text style={{ fontFamily: fonts.bodyExtraBold, color: '#8A5A00' }}>
+              Discount request pending · {formatMinor(discountRequest.amount_minor)}
+            </Text>
+            <Text style={{ fontSize: 13, color: '#6B4600' }}>{discountRequest.reason}</Text>
+          </View>
+        ) : discountRequest?.status === 'declined' ? (
+          <View style={{ backgroundColor: colors.errorBg, borderRadius: radius.lg, padding: 16 }}>
+            <Text style={{ fontFamily: fonts.bodyExtraBold, color: colors.error }}>Last discount request was declined.</Text>
+          </View>
+        ) : requestingDiscount ? (
+          <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, padding: 16, gap: 10 }}>
+            <Text style={{ fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>Request a discount</Text>
+            <TextField label="Amount (₹)" value={discountAmount} onChangeText={setDiscountAmount} keyboardType="decimal-pad" placeholder="0" />
+            <View style={{ gap: 6 }}>
+              <Text style={{ fontSize: 13, fontFamily: fonts.bodyBold, color: colors.ink900 }}>Reason</Text>
+              <TextInput
+                value={discountReason}
+                onChangeText={setDiscountReason}
+                placeholder="Why does this order need a discount?"
+                multiline
+                style={{ borderRadius: 14, borderWidth: 1.5, borderColor: colors.line, padding: 12, fontSize: 15, minHeight: 60, textAlignVertical: 'top' }}
+              />
+            </View>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Button title="Cancel" variant="outline" onPress={() => setRequestingDiscount(false)} style={{ flex: 1 }} />
+              <Button
+                title={submittingDiscount ? 'Sending…' : 'Send request'}
+                onPress={submitDiscountRequest}
+                disabled={!discountAmount || !discountReason.trim() || submittingDiscount}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </View>
+        ) : (
+          <Button title="Request discount" variant="outline" onPress={() => setRequestingDiscount(true)} />
+        )
+      ) : null}
+
+      <View style={{ gap: 10 }}>
+        {next ? <Button title={next.label} onPress={() => transition(next.status)} loading={busy} /> : null}
+        {order.order_status === 'new' && membership?.permissions.has('orders.reject') ? (
+          <Button title="Reject" variant="danger-outline" onPress={confirmReject} disabled={busy} />
+        ) : null}
+        {['new', 'accepted', 'preparing'].includes(order.order_status) && membership?.permissions.has('orders.cancel') ? (
+          <Button
+            title="Cancel order"
+            variant="outline"
+            onPress={() => transition('cancelled', 'Cancelled by staff')}
+            disabled={busy}
+          />
+        ) : null}
+        {order.payment_status === 'unpaid' ? (
+          <Button title="Record cash payment" variant="outline" onPress={recordCash} disabled={busy} />
+        ) : (
+          <Text style={{ fontFamily: fonts.bodyBold, color: colors.success, textAlign: 'center' }}>
+            Payment: {order.payment_status}
+          </Text>
+        )}
+        <Button title="Check bill" variant="outline" onPress={() => setBillOpen(true)} />
+      </View>
+    </ScrollView>
+
+    {billOpen ? (
+      <BillPreviewSheet
+        order={{
+          orderNumber: order.order_number,
+          createdAt: order.created_at,
+          tableLabel: order.table?.label ?? null,
+          items: order.items.map((i) => ({ name: i.item_name_snapshot, quantity: i.quantity, lineTotalMinor: i.line_total_minor })),
+          totalMinor: order.total_minor,
+        }}
+        onClose={() => setBillOpen(false)}
+      />
+    ) : null}
+    </SafeAreaView>
+  );
+}
+
+export default function OrderDetail() {
+  return (
+    <RequireAccess permission="orders.view">
+      <OrderDetailScreen />
+    </RequireAccess>
+  );
+}

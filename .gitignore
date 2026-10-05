@@ -1,0 +1,14 @@
+# Supabase CLI local state (connection strings / pooler URL)
+supabase/.temp/
+
+# Leaked local credential dumps — never commit these
+apps/blinkrest/authconfig.json
+apps/blinkrest/authconfig2.json
+apps/blinkrest/patch_auth.js
+
+# Claude Code local lock files
+.claude/scheduled_tasks.lock
+
+# OS
+.DS_Store
+Thumbs.db

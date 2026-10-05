@@ -1,0 +1,54 @@
+import { Redirect, Stack } from 'expo-router';
+
+import { useAuth } from '@/hooks/useAuth';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { colors } from '@/theme/tokens';
+
+export default function StaffLayout() {
+  const { session, membership, loading } = useAuth();
+  usePushNotifications(!!membership);
+
+  if (loading) return null;
+  if (!session) return <Redirect href="/login" />;
+  if (!membership) return <Redirect href="/onboarding" />;
+
+  return (
+    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+      <Stack.Screen name="home" />
+      <Stack.Screen name="orders" />
+      <Stack.Screen name="menu/index" />
+      <Stack.Screen name="menu/[id]" />
+      <Stack.Screen name="menu/new" />
+      <Stack.Screen name="tables" />
+      <Stack.Screen name="more" />
+      <Stack.Screen name="orders/[id]" />
+      <Stack.Screen name="orders/new" />
+      <Stack.Screen name="staff/index" />
+      <Stack.Screen name="staff/invite" />
+      <Stack.Screen name="analytics" />
+      <Stack.Screen name="waiter-home" />
+      <Stack.Screen name="kitchen-home" />
+      <Stack.Screen name="cashier-home" />
+      <Stack.Screen name="manager-home" />
+      <Stack.Screen name="customers/index" />
+      <Stack.Screen name="customers/[id]" />
+      <Stack.Screen name="preview/menu" />
+      <Stack.Screen name="notifications" />
+      <Stack.Screen name="offers/index" />
+      <Stack.Screen name="offers/create" />
+      <Stack.Screen name="payments/index" />
+      <Stack.Screen name="payments/[id]" />
+      <Stack.Screen name="reviews" />
+      <Stack.Screen name="settings" />
+      <Stack.Screen name="settings/profile" />
+      <Stack.Screen name="settings/orders" />
+      <Stack.Screen name="settings/security" />
+      <Stack.Screen name="settings/branding" options={{ gestureEnabled: false }} />
+      <Stack.Screen name="staff/permissions" />
+      <Stack.Screen name="staff/roles" />
+      <Stack.Screen name="subscription" />
+      <Stack.Screen name="support" />
+      <Stack.Screen name="table/[id]" />
+    </Stack>
+  );
+}

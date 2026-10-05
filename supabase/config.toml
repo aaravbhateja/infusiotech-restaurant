@@ -1,0 +1,48 @@
+# Supabase local dev config. Requires the Supabase CLI (not installed on this
+# machine yet) — install from https://supabase.com/docs/guides/cli, then run
+# `supabase init` to regenerate this file in full, or `supabase start` using
+# this one. Login is email OTP (one-time code), delivered via Resend's SMTP
+# relay under [auth.email.smtp] — no telecom DLT registration needed, since
+# this never sends SMS.
+
+project_id = "infusiotech-restaurant"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000"]
+jwt_expiry = 3600
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+enable_confirmations = true
+double_confirm_changes = false
+
+[auth.email.smtp]
+enabled = true
+host = "smtp.resend.com"
+port = 465
+user = "resend"
+# Resend's SMTP password is your Resend API key (starts with "re_").
+pass = "env(RESEND_API_KEY)"
+# Must be an address on a domain verified in Resend (Domains -> Add Domain,
+# then add the SPF/DKIM DNS records it gives you) — buying a domain needs no
+# business registration, just ownership + DNS access.
+admin_email = "login@yourdomain.com"
+sender_name = "InfusioTech Restaurant"
