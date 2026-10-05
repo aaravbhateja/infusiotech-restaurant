@@ -17,7 +17,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { BrandSplash } from '@/components/BrandSplash';
 import { OfflineBanner } from '@/components/OfflineBanner';
-import { AuthProvider } from '@/hooks/useAuth';
+import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import { colors } from '@/theme/tokens';
 
 SplashScreen.preventAutoHideAsync();
@@ -48,37 +48,49 @@ export default function RootLayout() {
     if (fontsLoaded) SplashScreen.hideAsync();
   }, [fontsLoaded]);
 
-  // Native: fonts are bundled into the app binary, so this resolves almost
-  // instantly and the branded splash is a nice touch. Web: the same fonts
-  // are a network download, and this is the one gate that sits in front of
-  // *every* route — including the public QR ordering page, which a guest
-  // reaches cold, often on weak venue wifi/mobile data. Blocking the whole
-  // app on that download turned "scan QR" into "stare at a splash screen".
-  // Render immediately on web instead; text just falls back to a system
-  // font for the instant until the custom fonts swap in.
-  if ((!fontsLoaded || !splashMinElapsed) && Platform.OS !== 'web') return <BrandSplash />;
-
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <OfflineBanner />
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="welcome" />
-          <Stack.Screen name="select-restaurant" />
-          <Stack.Screen name="login" />
-          <Stack.Screen name="otp" />
-          <Stack.Screen name="forgot-password" />
-          <Stack.Screen name="reset-password" />
-          <Stack.Screen name="onboarding" />
-          <Stack.Screen name="accept-invite" />
-          <Stack.Screen name="admin-login" />
-          <Stack.Screen name="admin" />
-          <Stack.Screen name="(staff)" />
-          <Stack.Screen name="order/[token]" />
-          <Stack.Screen name="r/[slug]/[table]" />
-        </Stack>
+        <AppGate fontsLoaded={fontsLoaded} splashMinElapsed={splashMinElapsed} />
       </AuthProvider>
     </SafeAreaProvider>
+  );
+}
+
+// One splash, held until fonts, the minimum display time AND the initial
+// auth check are all done. Previously the root showed one copy and the index
+// route mounted a second while auth loaded, so the animation visibly restarted.
+//
+// Web skips it: fonts there are a network download, and this gate sits in
+// front of every route — including the public QR ordering page a guest
+// reaches cold on weak venue wifi. Blocking on it turned "scan QR" into
+// "stare at a splash screen"; text falls back to a system font briefly.
+function AppGate({ fontsLoaded, splashMinElapsed }: { fontsLoaded: boolean; splashMinElapsed: boolean }) {
+  const { loading: authLoading } = useAuth();
+
+  if (Platform.OS !== 'web' && (!fontsLoaded || !splashMinElapsed || authLoading)) {
+    return <BrandSplash fontsReady={fontsLoaded} />;
+  }
+
+  return (
+    <>
+      <OfflineBanner />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="welcome" />
+        <Stack.Screen name="select-restaurant" />
+        <Stack.Screen name="login" />
+        <Stack.Screen name="otp" />
+        <Stack.Screen name="forgot-password" />
+        <Stack.Screen name="reset-password" />
+        <Stack.Screen name="onboarding" />
+        <Stack.Screen name="accept-invite" />
+        <Stack.Screen name="admin-login" />
+        <Stack.Screen name="admin" />
+        <Stack.Screen name="(staff)" />
+        <Stack.Screen name="order/[token]" />
+        <Stack.Screen name="r/[slug]/[table]" />
+      </Stack>
+    </>
   );
 }

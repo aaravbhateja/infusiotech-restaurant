@@ -41,7 +41,7 @@ function useSpin(duration: number, reverse = false) {
   return useAnimatedStyle(() => ({ transform: [{ rotate: `${r.value}deg` }] }));
 }
 
-export function BrandSplash() {
+export function BrandSplash({ fontsReady = true }: { fontsReady?: boolean }) {
   const iconScale = useSharedValue(0.72);
   const iconOpacity = useSharedValue(0);
   const glow = useSharedValue(0);
@@ -126,8 +126,10 @@ export function BrandSplash() {
 
       <View style={styles.words}>
         {/* Two sibling Texts, not one nested Text: iOS mis-measures nested
-            runs with negative letterSpacing and clips the last glyph. */}
-        <Animated.View style={[styles.wordRow, rise1]}>
+            runs with negative letterSpacing and clips the last glyph. Keyed
+            on fontsReady: iOS keeps the width it measured with the narrower
+            fallback font when the custom font arrives, cutting off "Rest". */}
+        <Animated.View key={fontsReady ? 'fonts' : 'fallback'} style={[styles.wordRow, rise1]}>
           <Text style={[styles.wordmark, { color: '#FFFFFF' }]}>Blink</Text>
           <Text style={[styles.wordmark, { color: ORANGE }]}>Rest</Text>
         </Animated.View>
@@ -171,7 +173,7 @@ const styles = StyleSheet.create({
   icon: { width: ICON, height: ICON, borderRadius: 28, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)' },
   shine: { position: 'absolute', top: -30, left: 0, width: 44, height: 180 },
   words: { marginTop: 56, alignItems: 'center', gap: 16 },
-  wordRow: { flexDirection: 'row', alignItems: 'baseline', paddingHorizontal: 6 },
+  wordRow: { flexDirection: 'row', alignItems: 'baseline', paddingHorizontal: 8 },
   wordmark: { fontFamily: fonts.display, fontSize: 44, letterSpacing: -1.2, lineHeight: 52 },
   taglineRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   rule: { width: 28, height: 1 },
