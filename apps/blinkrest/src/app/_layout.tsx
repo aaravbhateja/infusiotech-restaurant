@@ -69,7 +69,7 @@ function AppGate({ fontsLoaded, splashMinElapsed }: { fontsLoaded: boolean; spla
   const { loading: authLoading } = useAuth();
 
   if (Platform.OS !== 'web' && (!fontsLoaded || !splashMinElapsed || authLoading)) {
-    return <BrandSplash fontsReady={fontsLoaded} />;
+    return <BrandSplash />;
   }
 
   return (
