@@ -32,6 +32,26 @@ async function fetchRazorpayMethod(paymentId: string): Promise<string | null> {
   }
 }
 
+// Route only creates the actual transfer once the payment is captured, so
+// its id isn't known at order-creation time — it has to be looked up after
+// the fact. Best-effort, same reasoning as fetchRazorpayMethod: a payment
+// that already succeeded should never be stranded just because this lookup
+// fails, it just won't have a transfer id on the ledger yet.
+async function fetchRazorpayTransferId(paymentId: string): Promise<string | null> {
+  try {
+    const auth = btoa(`${razorpayKeyId}:${razorpayKeySecret}`);
+    const res = await fetch(`https://api.razorpay.com/v1/payments/${paymentId}/transfers`, {
+      headers: { Authorization: `Basic ${auth}` },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const first = Array.isArray(data?.items) ? data.items[0] : null;
+    return typeof first?.id === 'string' ? first.id : null;
+  } catch {
+    return null;
+  }
+}
+
 async function verifyRazorpaySignature(orderId: string, paymentId: string, signature: string): Promise<boolean> {
   const key = await crypto.subtle.importKey(
     'raw',
@@ -58,7 +78,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: 'invalid_request' }), { status: 400, headers: corsHeaders });
   }
 
-  let payment: { provider: string; reference: string; method: string | null } | null = null;
+  let payment: { provider: string; reference: string; method: string | null; transfer_id: string | null } | null = null;
   if (body.razorpayPaymentId || body.razorpayOrderId || body.razorpaySignature) {
     if (!body.razorpayPaymentId || !body.razorpayOrderId || !body.razorpaySignature) {
       return new Response(JSON.stringify({ error: 'incomplete_payment_proof' }), { status: 400, headers: corsHeaders });
@@ -67,8 +87,11 @@ Deno.serve(async (req) => {
     if (!valid) {
       return new Response(JSON.stringify({ error: 'payment_verification_failed' }), { status: 400, headers: corsHeaders });
     }
-    const method = await fetchRazorpayMethod(body.razorpayPaymentId);
-    payment = { provider: 'razorpay', reference: body.razorpayPaymentId, method };
+    const [method, transferId] = await Promise.all([
+      fetchRazorpayMethod(body.razorpayPaymentId),
+      fetchRazorpayTransferId(body.razorpayPaymentId),
+    ]);
+    payment = { provider: 'razorpay', reference: body.razorpayPaymentId, method, transfer_id: transferId };
   }
 
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(body.token));

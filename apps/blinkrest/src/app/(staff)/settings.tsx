@@ -39,6 +39,7 @@ const GROUPS: { title: string; rows: Row[] }[] = [
     rows: [
       { label: 'Tax settings', sub: 'GST rate for new orders', icon: 'percent', bg: colors.successBg, fg: colors.success, route: '/(staff)/settings/profile' },
       { label: 'Payment settings', sub: 'Transactions, refunds, reconciliation', icon: 'card', bg: colors.successBg, fg: colors.success, route: '/(staff)/payments' },
+      { label: 'Online payments & KYC', sub: 'Submit PAN, Aadhar & bank details to accept online payments', icon: 'shield', bg: colors.successBg, fg: colors.success, route: '/(staff)/settings/payments-kyc' },
       { label: 'Subscription', sub: 'Plan, billing', icon: 'crown', bg: colors.successBg, fg: colors.success, route: '/(staff)/subscription' },
     ],
   },

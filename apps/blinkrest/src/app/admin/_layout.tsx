@@ -48,6 +48,7 @@ export default function AdminLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="tenants/[id]" />
       <Stack.Screen name="support" />
+      <Stack.Screen name="kyc" />
     </Stack>
   );
 }

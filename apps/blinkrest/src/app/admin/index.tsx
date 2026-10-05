@@ -81,6 +81,9 @@ export default function AdminDashboard() {
             <Text style={{ fontSize: 28, fontFamily: fonts.display, color: colors.ink900 }}>Platform console</Text>
             <Text style={{ fontSize: 13, color: colors.ink500 }}>InfusioTech · BlinkRest</Text>
           </View>
+          <Pressable onPress={() => router.push('/admin/kyc' as never)} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center', marginRight: 8 }}>
+            <Icon name="shield" size={20} color={colors.ink900} />
+          </Pressable>
           <Pressable onPress={() => router.push('/admin/support' as never)} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center', marginRight: 8 }}>
             <Icon name="help" size={20} color={colors.ink900} />
           </Pressable>

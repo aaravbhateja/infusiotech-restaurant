@@ -62,7 +62,7 @@ type Category = { id: string; name: string; sort_order: number };
 type Rating = { avg: number; count: number };
 
 type TableInfo = {
-  tenant: { id: string; name: string; gst_percent: number; logo_path?: string | null; cover_image_path?: string | null; brand_colors?: { primary?: string } | null; settings?: { accepting_orders?: boolean; cuisine?: string; open_time?: string; close_time?: string } };
+  tenant: { id: string; name: string; gst_percent: number; logo_path?: string | null; cover_image_path?: string | null; brand_colors?: { primary?: string } | null; pay_online_enabled?: boolean; settings?: { accepting_orders?: boolean; cuisine?: string; open_time?: string; close_time?: string } };
   table: { id: string; label: string };
   rating: Rating | null;
 };
@@ -126,7 +126,7 @@ export function PublicOrderScreen({ token, previewTenantId, onBack }: { token?: 
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [offerCode, setOfferCode] = useState('');
   const [offerError, setOfferError] = useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'online' | 'counter'>('online');
+  const [paymentMethod, setPaymentMethod] = useState<'online' | 'counter'>('counter');
   const [quote, setQuote] = useState<Quote | null>(null);
   const [placing, setPlacing] = useState(false);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
@@ -250,6 +250,12 @@ export function PublicOrderScreen({ token, previewTenantId, onBack }: { token?: 
   }, [items, activeCategory, query, vegOnly]);
 
   const acceptingOrders = info?.tenant.settings?.accepting_orders !== false;
+  const payOnlineAvailable = info?.tenant.pay_online_enabled === true;
+  // The restaurant may not have completed KYC / enabled online payments —
+  // never treat "online" as selected (or offer it) when that's the case,
+  // regardless of what the state was left at before `info` loaded.
+  const effectivePaymentMethod = payOnlineAvailable ? paymentMethod : 'counter';
+
   const cartLines = Object.values(cart);
   const cartTotal = cartLines.reduce((sum, l) => sum + l.item.price_minor * l.quantity, 0);
   const cartCount = cartLines.reduce((sum, l) => sum + l.quantity, 0);
@@ -398,7 +404,7 @@ export function PublicOrderScreen({ token, previewTenantId, onBack }: { token?: 
     setPlacing(true);
     setOfferError(null);
     try {
-      if (paymentMethod === 'counter') {
+      if (effectivePaymentMethod === 'counter') {
         await finalizeOrder();
         return;
       }
@@ -773,7 +779,9 @@ export function PublicOrderScreen({ token, previewTenantId, onBack }: { token?: 
             <View style={{ gap: 10 }}>
               <Text style={{ fontSize: 18, fontFamily: fonts.display, color: colors.ink900, marginHorizontal: 4 }}>How would you like to pay?</Text>
               {([
-                { key: 'online' as const, title: 'Pay online now', sub: 'UPI, cards, netbanking & wallets', icon: 'qr' as const, note: 'Secured by Razorpay · order goes to the kitchen once paid', noteIcon: 'shield' as const, tileBg: brand.tint, tileFg: brand.dark },
+                ...(payOnlineAvailable
+                  ? [{ key: 'online' as const, title: 'Pay online now', sub: 'UPI, cards, netbanking & wallets', icon: 'qr' as const, note: 'Secured by Razorpay · order goes to the kitchen once paid', noteIcon: 'shield' as const, tileBg: brand.tint, tileFg: brand.dark }]
+                  : []),
                 { key: 'counter' as const, title: "I'll call waiter for bill", sub: 'Pay cash or UPI at the table when it arrives', icon: 'bell' as const, note: 'Order goes to the kitchen right away', noteIcon: 'flame' as const, tileBg: colors.saffron50, tileFg: '#8A5A00' },
               ]).map((o) => {
                 const on = paymentMethod === o.key;
@@ -811,13 +819,13 @@ export function PublicOrderScreen({ token, previewTenantId, onBack }: { token?: 
         {acceptingOrders ? (
           <View style={{ backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.line, padding: 16, paddingBottom: 24, gap: 6 }}>
             <Button
-              title={isPreview ? 'Place order (preview only)' : placing ? 'Please wait…' : paymentMethod === 'online' ? `Pay securely · ${formatMinor(total)}` : `Place order · ${formatMinor(total)}`}
+              title={isPreview ? 'Place order (preview only)' : placing ? 'Please wait…' : effectivePaymentMethod === 'online' ? `Pay securely · ${formatMinor(total)}` : `Place order · ${formatMinor(total)}`}
               onPress={placeOrder}
               loading={placing}
               disabled={!isPreview && (!customerName.trim() || customerPhone.replace(/\D/g, '').length < 10)}
             />
             <Text style={{ textAlign: 'center', fontSize: 12, color: colors.ink500 }}>
-              {paymentMethod === 'online' ? "Razorpay's secure checkout opens next" : "A waiter will bring your bill to the table"}
+              {effectivePaymentMethod === 'online' ? "Razorpay's secure checkout opens next" : "A waiter will bring your bill to the table"}
             </Text>
           </View>
         ) : null}

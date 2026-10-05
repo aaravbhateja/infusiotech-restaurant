@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
   }
 
   const [{ data: tenant }, { data: table }, { data: reviews }] = await Promise.all([
-    admin.from('tenants').select('id, name, logo_path, cover_image_path, brand_colors, settings, gst_percent').eq('id', qr.tenant_id).single(),
+    admin.from('tenants').select('id, name, logo_path, cover_image_path, brand_colors, settings, gst_percent, pay_online_enabled').eq('id', qr.tenant_id).single(),
     admin.from('restaurant_tables').select('id, label, capacity').eq('id', qr.table_id).single(),
     admin.from('reviews').select('rating').eq('tenant_id', qr.tenant_id),
   ]);

@@ -2,6 +2,14 @@
 // read-only twin of create_public_order) and opens a matching Razorpay
 // order for that amount. No restaurant order row exists yet — one is only
 // ever created by create-order, after payment is verified.
+//
+// Online payment is not available to every restaurant by default — it only
+// turns on once the tenant has completed KYC (PAN, Aadhar, bank details),
+// a platform admin has verified it, and a Razorpay Linked Account exists to
+// settle into. When that's in place, the order is opened with a Razorpay
+// Route `transfers` entry so 97% of the payment settles straight to the
+// restaurant's linked account; the remaining 3% stays in our platform
+// account as commission.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -11,6 +19,8 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const razorpayKeyId = Deno.env.get('RAZORPAY_KEY_ID')!;
 const razorpayKeySecret = Deno.env.get('RAZORPAY_KEY_SECRET')!;
+
+const RESTAURANT_SHARE = 0.97;
 
 Deno.serve(async (req) => {
   const preflight = handleCors(req);
@@ -42,6 +52,18 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: quoteError?.message ?? 'could_not_price_order' }), { status: 400, headers: corsHeaders });
   }
 
+  const [{ data: tenant }, { data: kyc }] = await Promise.all([
+    admin.from('tenants').select('pay_online_enabled').eq('id', quote.tenant_id).maybeSingle(),
+    admin.from('tenant_kyc').select('status, razorpay_linked_account_id').eq('tenant_id', quote.tenant_id).maybeSingle(),
+  ]);
+
+  const linkedAccountId = kyc?.status === 'verified' ? kyc.razorpay_linked_account_id : null;
+  if (!tenant?.pay_online_enabled || !linkedAccountId) {
+    return new Response(JSON.stringify({ error: 'online_payment_not_enabled' }), { status: 400, headers: corsHeaders });
+  }
+
+  const restaurantShareMinor = Math.round(quote.total_minor * RESTAURANT_SHARE);
+
   const auth = btoa(`${razorpayKeyId}:${razorpayKeySecret}`);
   const rpRes = await fetch('https://api.razorpay.com/v1/orders', {
     method: 'POST',
@@ -50,6 +72,15 @@ Deno.serve(async (req) => {
       amount: quote.total_minor,
       currency: quote.currency,
       receipt: `qr_${Date.now()}`,
+      transfers: [
+        {
+          account: linkedAccountId,
+          amount: restaurantShareMinor,
+          currency: quote.currency,
+          on_hold: false,
+          notes: { purpose: 'restaurant_payout' },
+        },
+      ],
     }),
   });
 
