@@ -11,7 +11,7 @@ import {
 } from '@expo-google-fonts/figtree';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -22,7 +22,19 @@ import { colors } from '@/theme/tokens';
 
 SplashScreen.preventAutoHideAsync();
 
+// Native fonts load in a fraction of a second, which cut the branded splash
+// off before its entrance animation (and footer) ever finished.
+const SPLASH_MIN_MS = 2200;
+
 export default function RootLayout() {
+  const [splashMinElapsed, setSplashMinElapsed] = useState(Platform.OS === 'web');
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const t = setTimeout(() => setSplashMinElapsed(true), SPLASH_MIN_MS);
+    return () => clearTimeout(t);
+  }, []);
+
   const [fontsLoaded] = useFonts({
     BricolageGrotesque_700Bold,
     BricolageGrotesque_800ExtraBold,
@@ -44,7 +56,7 @@ export default function RootLayout() {
   // app on that download turned "scan QR" into "stare at a splash screen".
   // Render immediately on web instead; text just falls back to a system
   // font for the instant until the custom fonts swap in.
-  if (!fontsLoaded && Platform.OS !== 'web') return <BrandSplash />;
+  if ((!fontsLoaded || !splashMinElapsed) && Platform.OS !== 'web') return <BrandSplash />;
 
   return (
     <SafeAreaProvider>
