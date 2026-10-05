@@ -10,21 +10,33 @@ import { colors, fonts, radius } from '@/theme/tokens';
 type PendingKyc = {
   tenant_id: string;
   tenant_name: string;
-  status: 'submitted' | 'verified' | 'rejected';
+  status: 'submitted' | 'under_review' | 'needs_clarification' | 'verified' | 'rejected';
   legal_business_name: string;
   pan: string;
   aadhar_last4: string;
   bank_account_holder_name: string;
   bank_account_number: string;
   bank_ifsc: string;
+  business_type: string;
+  business_pan: string | null;
+  gstin: string | null;
+  razorpay_linked_account_id: string | null;
   submitted_at: string | null;
 };
 
 const STATUS_COLOR: Record<string, { bg: string; fg: string }> = {
   submitted: { bg: colors.saffron50, fg: '#8A5A00' },
+  under_review: { bg: colors.saffron50, fg: '#8A5A00' },
+  needs_clarification: { bg: colors.saffron50, fg: '#8A5A00' },
   verified: { bg: colors.successBg, fg: colors.success },
   rejected: { bg: colors.errorBg, fg: colors.error },
 };
+
+// Razorpay's own webhook drives the happy path automatically (account
+// created → under review → activated). These rows only need a human when
+// something didn't progress on its own: the automated call never fired
+// (still "submitted" after a while), or Razorpay came back asking for more.
+const NEEDS_MANUAL_ACTION = new Set(['submitted', 'needs_clarification']);
 
 export default function AdminKycQueue() {
   const [rows, setRows] = useState<PendingKyc[]>([]);
@@ -84,6 +96,9 @@ export default function AdminKycQueue() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 20, gap: 12, paddingBottom: 32 }}>
+        <Text style={{ fontSize: 12, color: colors.ink500 }}>
+          Razorpay reviews most submissions on its own — &ldquo;Under review&rdquo; rows need no action. Only act on &ldquo;Submitted&rdquo; (automatic setup never fired) or &ldquo;Needs clarification&rdquo; rows.
+        </Text>
         {loading ? <Text style={{ color: colors.ink500 }}>Loading…</Text> : null}
         {!loading && rows.length === 0 ? <Text style={{ color: colors.ink500, textAlign: 'center', padding: 24 }}>No submissions yet.</Text> : null}
 
@@ -103,15 +118,19 @@ export default function AdminKycQueue() {
               </Text>
 
               <View style={{ gap: 4, marginTop: 4 }}>
+                <DetailRow label="Business type" value={r.business_type} />
                 <DetailRow label="Legal name" value={r.legal_business_name} />
                 <DetailRow label="PAN" value={r.pan} />
+                {r.business_pan ? <DetailRow label="Business PAN" value={r.business_pan} /> : null}
+                {r.gstin ? <DetailRow label="GSTIN" value={r.gstin} /> : null}
                 <DetailRow label="Aadhar" value={`•••• •••• ${r.aadhar_last4}`} />
                 <DetailRow label="Account holder" value={r.bank_account_holder_name} />
                 <DetailRow label="Bank account" value={r.bank_account_number} />
                 <DetailRow label="IFSC" value={r.bank_ifsc} />
+                {r.razorpay_linked_account_id ? <DetailRow label="Razorpay account" value={r.razorpay_linked_account_id} /> : null}
               </View>
 
-              {r.status === 'submitted' ? (
+              {NEEDS_MANUAL_ACTION.has(r.status) ? (
                 isActing ? (
                   <View style={{ gap: 8, marginTop: 6 }}>
                     {actionKind === 'verify' ? (
