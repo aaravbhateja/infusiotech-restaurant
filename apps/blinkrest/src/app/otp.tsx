@@ -88,7 +88,7 @@ export default function Otp() {
     <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: colors.bg }}>
       <View style={{ flex: 1, padding: 24, gap: 22 }}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/login'))}
           style={{
             width: 44,
             height: 44,
