@@ -52,6 +52,7 @@ export default function Home() {
   const [pendingMinor, setPendingMinor] = useState(0);
   const [pendingCount, setPendingCount] = useState(0);
   const [customers, setCustomers] = useState<{ id: string; name: string | null }[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const load = useCallback(async () => {
     if (membership) {
@@ -108,6 +109,14 @@ export default function Home() {
     setPendingMinor((unpaid ?? []).reduce((s, o) => s + o.total_minor, 0));
     setPendingCount(unpaid?.length ?? 0);
     setCustomers((cust ?? []) as { id: string; name: string | null }[]);
+    if (membership) {
+      const [{ data: notes }, { data: reads }] = await Promise.all([
+        supabase.from('notifications').select('id').order('created_at', { ascending: false }).limit(100),
+        supabase.from('notification_reads').select('notification_id').eq('membership_id', membership.id),
+      ]);
+      const readIds = new Set((reads ?? []).map((r) => r.notification_id));
+      setUnreadCount((notes ?? []).filter((n) => !readIds.has(n.id)).length);
+    }
     setLoadingFirst(false);
 
     const { data: active } = await supabase
@@ -261,7 +270,9 @@ export default function Home() {
             </Text>
             <Text style={{ fontSize: 13, fontFamily: fonts.bodySemi, color: colors.ink500 }}>{membership?.roleName}</Text>
           </View>
-          <View
+          <Pressable
+            onPress={() => router.push('/(staff)/notifications' as never)}
+            accessibilityLabel="Notifications"
             style={{
               width: 46,
               height: 46,
@@ -274,7 +285,12 @@ export default function Home() {
             }}
           >
             <Icon name="bell" size={22} color={colors.ink900} />
-          </View>
+            {unreadCount > 0 ? (
+              <View style={{ position: 'absolute', top: -2, right: -2, minWidth: 20, height: 20, paddingHorizontal: 5, borderRadius: 10, backgroundColor: colors.coral600, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 11, fontFamily: fonts.bodyExtraBold, color: '#FFFFFF' }}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+              </View>
+            ) : null}
+          </Pressable>
         </View>
 
         {/* Greeting */}
