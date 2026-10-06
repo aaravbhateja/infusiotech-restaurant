@@ -357,7 +357,7 @@ export function PublicOrderScreen({ token, previewTenantId, onBack }: { token?: 
         // ignore — next tick retries
       }
     }
-    const interval = setInterval(poll, 4000);
+    const interval = setInterval(poll, 2000);
     return () => {
       cancelled = true;
       clearInterval(interval);

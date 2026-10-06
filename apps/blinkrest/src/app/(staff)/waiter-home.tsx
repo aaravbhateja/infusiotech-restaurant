@@ -13,6 +13,7 @@ import { guardOnline } from '@/lib/offline';
 import { homePathForRole } from '@/lib/roleHome';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts, formatMinor, radius, shadow } from '@/theme/tokens';
+import { tenantSubs, useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 type OrderRow = {
   id: string;
@@ -56,6 +57,8 @@ export default function WaiterHome() {
       .order('created_at', { ascending: false });
     setOrders((data as unknown as OrderRow[]) ?? []);
   }, []);
+
+  useRealtimeRefresh('waiterhometsx', tenantSubs(membership?.tenantId, ['orders', 'staff_shifts', 'restaurant_tables']), load);
 
   const loadShift = useCallback(async () => {
     if (!membership || !session) return;
@@ -105,12 +108,12 @@ export default function WaiterHome() {
 
   async function markServed(order: OrderRow) {
     if (!guardOnline(isOnline)) return;
+    setOrders((prev) => prev.filter((o) => o.id !== order.id));
     const { error } = await supabase.rpc('transition_order_status', { p_order_id: order.id, p_new_status: 'served', p_reason: null });
     if (error) {
       Alert.alert('Could not update order', error.message);
-      return;
+      await load();
     }
-    await load();
   }
 
   if (membership && membership.roleName !== 'Waiter') return <Redirect href={homePathForRole(membership.roleName)} />;

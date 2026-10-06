@@ -13,6 +13,7 @@ import { guardOnline } from '@/lib/offline';
 import { homePathForRole } from '@/lib/roleHome';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts, radius } from '@/theme/tokens';
+import { tenantSubs, useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 const DARK = { bg: '#141110', card: '#2A2422', text: '#FFFFFF', sub: '#C9BDB6' };
 const LATE_MINUTES = 10;
@@ -80,6 +81,8 @@ export default function KitchenHome() {
     );
   }, []);
 
+  useRealtimeRefresh('kitchenhometsx', tenantSubs(membership?.tenantId, ['order_items', 'menu_items']), load);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
     load();
@@ -96,9 +99,17 @@ export default function KitchenHome() {
   async function advance(t: Ticket) {
     if (!guardOnline(isOnline)) return;
     const next = t.order_status === 'accepted' ? 'preparing' : 'ready';
+    if (next === 'ready') {
+      setTickets((prev) => prev.filter((x) => x.id !== t.id));
+      setReadyCount((c) => c + 1);
+    } else {
+      setTickets((prev) => prev.map((x) => (x.id === t.id ? { ...x, order_status: 'preparing' } : x)));
+    }
     const { error } = await supabase.rpc('transition_order_status', { p_order_id: t.id, p_new_status: next, p_reason: null });
-    if (error) Alert.alert('Could not update', error.message);
-    else load();
+    if (error) {
+      Alert.alert('Could not update', error.message);
+      load();
+    }
   }
 
   const stations = Array.from(new Set(tickets.flatMap((t) => t.items.map((i) => i.station))));

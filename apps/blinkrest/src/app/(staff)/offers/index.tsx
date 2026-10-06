@@ -8,6 +8,7 @@ import { RequireAccess } from '@/components/RequireAccess';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts, formatMinor, radius } from '@/theme/tokens';
+import { tenantSubs, useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 type Status = 'Active' | 'Scheduled' | 'Expired';
 
@@ -58,6 +59,8 @@ function OffersScreen() {
     setRedemptions(agg);
   }, []);
 
+  useRealtimeRefresh('offersindextsx', tenantSubs(membership?.tenantId, ['offers']), load);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
     load();
@@ -72,9 +75,12 @@ function OffersScreen() {
   const visible = withStatus.filter((o) => o.status === tab);
 
   async function toggle(o: OfferRow) {
+    setOffers((prev) => prev.map((x) => (x.id === o.id ? { ...x, is_active: !o.is_active } : x)));
     const { error } = await supabase.rpc('set_offer_active', { p_offer_id: o.id, p_active: !o.is_active });
-    if (error) Alert.alert('Could not update offer', error.message);
-    else load();
+    if (error) {
+      Alert.alert('Could not update offer', error.message);
+      load();
+    }
   }
 
   const canManage = membership?.permissions.has('offers.manage') ?? false;

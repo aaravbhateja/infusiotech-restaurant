@@ -7,6 +7,7 @@ import { Icon, type IconName } from '@/components/Icon';
 import { RequireAccess } from '@/components/RequireAccess';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts, formatMinor, radius, shadow } from '@/theme/tokens';
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 type Customer = { id: string; name: string | null; phone: string | null; email: string | null; created_at: string; staff_notes: string | null };
 type OrderRow = { id: string; order_number: string; order_status: string; total_minor: number; created_at: string; table: { label: string } | null };
@@ -52,6 +53,8 @@ function CustomerDetailScreen() {
       setFavorites([]);
     }
   }, [id]);
+
+  useRealtimeRefresh('customersidtsx', [{ table: 'customers' }, { table: 'orders' }], load);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount

@@ -13,6 +13,7 @@ import { guardOnline } from '@/lib/offline';
 import { homePathForRole } from '@/lib/roleHome';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts, formatMinor, radius } from '@/theme/tokens';
+import { tenantSubs, useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 type OrderRow = { id: string; order_number: string; order_status: string; total_minor: number; created_at: string; table_id: string | null; table: { label: string } | null };
 type Member = { id: string; display_name: string | null; role_name: string };
@@ -31,7 +32,6 @@ export default function ManagerHome() {
   const [revenueToday, setRevenueToday] = useState(0);
   const [team, setTeam] = useState<Member[]>([]);
   const [discountRequests, setDiscountRequests] = useState<DiscountRequest[]>([]);
-  const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [logoPath, setLogoPath] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -71,6 +71,8 @@ export default function ManagerHome() {
     setRevenueToday((paid ?? []).reduce((s, o) => s + o.total_minor, 0));
   }, [membership]);
 
+  useRealtimeRefresh('managerhometsx', tenantSubs(membership?.tenantId, ['orders', 'payments', 'discount_requests', 'staff_shifts', 'restaurant_tables']), load);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
     load();
@@ -104,11 +106,12 @@ export default function ManagerHome() {
 
   async function reviewDiscount(req: DiscountRequest, approve: boolean) {
     if (!guardOnline(isOnline)) return;
-    setReviewingId(req.id);
+    setDiscountRequests((prev) => prev.filter((r) => r.id !== req.id));
     const { error } = await supabase.rpc('review_discount_request', { p_request_id: req.id, p_approve: approve });
-    setReviewingId(null);
-    if (error) Alert.alert('Could not review request', error.message);
-    else load();
+    if (error) {
+      Alert.alert('Could not review request', error.message);
+      load();
+    }
   }
 
   if (!membership) return null;
@@ -180,14 +183,12 @@ export default function ManagerHome() {
                 <Text style={{ fontSize: 13, color: colors.ink700 }}>{req.reason}</Text>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <Pressable
-                    disabled={reviewingId === req.id}
                     onPress={() => reviewDiscount(req, false)}
                     style={{ flex: 1, height: 44, borderRadius: radius.pill, borderWidth: 1.5, borderColor: '#F4C7C1', alignItems: 'center', justifyContent: 'center' }}
                   >
                     <Text style={{ fontFamily: fonts.bodyExtraBold, color: colors.error }}>Decline</Text>
                   </Pressable>
                   <Pressable
-                    disabled={reviewingId === req.id}
                     onPress={() => reviewDiscount(req, true)}
                     style={{ flex: 1, height: 44, borderRadius: radius.pill, backgroundColor: colors.success, alignItems: 'center', justifyContent: 'center' }}
                   >

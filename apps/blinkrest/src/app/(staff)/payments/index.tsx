@@ -8,6 +8,7 @@ import { RequireAccess } from '@/components/RequireAccess';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts, formatMinor, radius } from '@/theme/tokens';
+import { tenantSubs, useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 type Status = 'pending' | 'paid' | 'failed' | 'refunded' | 'cash_received' | 'reconciled';
 
@@ -71,6 +72,8 @@ function PaymentsScreen() {
     const { data } = await q;
     setTxns((data as unknown as Txn[]) ?? []);
   }, [period]);
+
+  useRealtimeRefresh('paymentsindextsx', tenantSubs(membership?.tenantId, ['payments', 'orders']), load);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount

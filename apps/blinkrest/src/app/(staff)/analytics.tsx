@@ -11,6 +11,7 @@ import { EmptyState, ErrorState } from '@/components/States';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts, formatMinor, radius } from '@/theme/tokens';
+import { tenantSubs, useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 const RANGES = [
   { key: 'today', label: 'Today', days: 1, offset: 0 },
@@ -111,6 +112,8 @@ function AnalyticsScreen() {
     setFailed(false);
     setLoading(false);
   }, [range]);
+
+  useRealtimeRefresh('analyticstsx', tenantSubs(membership?.tenantId, ['orders', 'payments']), load);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount

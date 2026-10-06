@@ -8,6 +8,7 @@ import { RequireAccess } from '@/components/RequireAccess';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts, formatMinor, radius } from '@/theme/tokens';
+import { tenantSubs, useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 type Payment = {
   id: string;
@@ -28,7 +29,6 @@ function PaymentDetailScreen() {
   const { membership } = useAuth();
   const [payment, setPayment] = useState<Payment | null>(null);
   const [refund, setRefund] = useState<Refund | null>(null);
-  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     const { data: p } = await supabase
@@ -42,17 +42,20 @@ function PaymentDetailScreen() {
     setRefund(r);
   }, [id]);
 
+  useRealtimeRefresh('paymentsidtsx', tenantSubs(membership?.tenantId, ['payments']), load);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
     load();
   }, [load]);
 
   async function reconcile() {
-    setBusy(true);
+    setPayment((prev) => (prev ? { ...prev, status: 'reconciled' } : prev));
     const { error } = await supabase.rpc('reconcile_payment', { p_payment_id: id });
-    setBusy(false);
-    if (error) Alert.alert('Could not reconcile', error.message);
-    else load();
+    if (error) {
+      Alert.alert('Could not reconcile', error.message);
+      load();
+    }
   }
 
   if (!payment) return null;
@@ -146,8 +149,8 @@ function PaymentDetailScreen() {
         </View>
 
         {canReconcile ? (
-          <Pressable disabled={busy} onPress={reconcile} style={{ height: 54, borderRadius: radius.pill, backgroundColor: colors.ink900, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontFamily: fonts.bodyExtraBold, color: '#FFFFFF', fontSize: 15 }}>{busy ? 'Reconciling…' : 'Mark reconciled'}</Text>
+          <Pressable onPress={reconcile} style={{ height: 54, borderRadius: radius.pill, backgroundColor: colors.ink900, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontFamily: fonts.bodyExtraBold, color: '#FFFFFF', fontSize: 15 }}>Mark reconciled</Text>
           </Pressable>
         ) : null}
       </ScrollView>

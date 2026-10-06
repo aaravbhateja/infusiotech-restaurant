@@ -13,6 +13,7 @@ import { menuImageUrl } from '@/lib/menuImage';
 import { homePathForRole } from '@/lib/roleHome';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts, formatMinor, radius, shadow } from '@/theme/tokens';
+import { tenantSubs, useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 const ACTIVE_STATUSES = ['new', 'accepted', 'preparing', 'ready'];
 
@@ -133,6 +134,8 @@ export default function Home() {
         : null,
     );
   }, [membership]);
+
+  useRealtimeRefresh('hometsx', tenantSubs(membership?.tenantId, ['orders', 'payments', 'restaurant_tables', 'customers', 'notifications']), load);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount

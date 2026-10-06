@@ -12,6 +12,7 @@ import { useIsOnline } from '@/hooks/useIsOnline';
 import { guardOnline } from '@/lib/offline';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts, formatMinor, radius, statusBadge } from '@/theme/tokens';
+import { tenantSubs, useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 type OrderItem = {
   id: string;
@@ -48,7 +49,6 @@ function OrderDetailScreen() {
   const { membership } = useAuth();
   const isOnline = useIsOnline();
   const [order, setOrder] = useState<OrderDetailData | null>(null);
-  const [busy, setBusy] = useState(false);
   const [billOpen, setBillOpen] = useState(false);
   const [discountRequest, setDiscountRequest] = useState<DiscountRequest | null>(null);
   const [requestingDiscount, setRequestingDiscount] = useState(false);
@@ -76,6 +76,8 @@ function OrderDetailScreen() {
     setDiscountRequest(dr);
   }, [id]);
 
+  useRealtimeRefresh('ordersidtsx', tenantSubs(membership?.tenantId, ['orders', 'order_items', 'payments', 'discount_requests']), load);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
     load();
@@ -83,18 +85,16 @@ function OrderDetailScreen() {
 
   async function transition(status: string, reason?: string) {
     if (!guardOnline(isOnline)) return;
-    setBusy(true);
+    setOrder((prev) => (prev ? { ...prev, order_status: status } : prev));
     const { error } = await supabase.rpc('transition_order_status', {
       p_order_id: id,
       p_new_status: status,
       p_reason: reason ?? null,
     });
-    setBusy(false);
     if (error) {
       Alert.alert('Could not update order', error.message);
-      return;
+      await load();
     }
-    await load();
   }
 
   function confirmReject() {
@@ -109,14 +109,12 @@ function OrderDetailScreen() {
 
   async function recordCash() {
     if (!guardOnline(isOnline)) return;
-    setBusy(true);
+    setOrder((prev) => (prev ? { ...prev, payment_status: 'cash_received' } : prev));
     const { error } = await supabase.rpc('record_cash_payment', { p_order_id: id });
-    setBusy(false);
     if (error) {
       Alert.alert('Could not record payment', error.message);
-      return;
+      await load();
     }
-    await load();
   }
 
   async function submitDiscountRequest() {
@@ -235,20 +233,19 @@ function OrderDetailScreen() {
       ) : null}
 
       <View style={{ gap: 10 }}>
-        {next ? <Button title={next.label} onPress={() => transition(next.status)} loading={busy} /> : null}
+        {next ? <Button title={next.label} onPress={() => transition(next.status)} /> : null}
         {order.order_status === 'new' && membership?.permissions.has('orders.reject') ? (
-          <Button title="Reject" variant="danger-outline" onPress={confirmReject} disabled={busy} />
+          <Button title="Reject" variant="danger-outline" onPress={confirmReject} />
         ) : null}
         {['new', 'accepted', 'preparing'].includes(order.order_status) && membership?.permissions.has('orders.cancel') ? (
           <Button
             title="Cancel order"
             variant="outline"
             onPress={() => transition('cancelled', 'Cancelled by staff')}
-            disabled={busy}
           />
         ) : null}
         {order.payment_status === 'unpaid' ? (
-          <Button title="Record cash payment" variant="outline" onPress={recordCash} disabled={busy} />
+          <Button title="Record cash payment" variant="outline" onPress={recordCash} />
         ) : (
           <Text style={{ fontFamily: fonts.bodyBold, color: colors.success, textAlign: 'center' }}>
             Payment: {order.payment_status}

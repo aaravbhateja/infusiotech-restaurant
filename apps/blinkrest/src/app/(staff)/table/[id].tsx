@@ -13,6 +13,7 @@ import { useIsOnline } from '@/hooks/useIsOnline';
 import { guardOnline } from '@/lib/offline';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts, formatMinor, radius } from '@/theme/tokens';
+import { tenantSubs, useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 type Status = 'O' | 'F' | 'C' | 'R';
 
@@ -44,7 +45,6 @@ function TableDetailScreen() {
   const [history, setHistory] = useState<HistoryOrder[]>([]);
   const [status, setStatus] = useState<Status>('O');
   const [sheet, setSheet] = useState<'' | 'F' | 'C' | 'R'>('');
-  const [busy, setBusy] = useState(false);
   const [newQr, setNewQr] = useState<string | null>(null);
   const [reissuing, setReissuing] = useState(false);
   const [editingTable, setEditingTable] = useState(false);
@@ -101,6 +101,8 @@ function TableDetailScreen() {
     );
   }, [id]);
 
+  useRealtimeRefresh('tableidtsx', tenantSubs(membership?.tenantId, ['restaurant_tables', 'orders', 'order_items', 'payments']), load);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
     load();
@@ -129,11 +131,12 @@ function TableDetailScreen() {
   async function collectCash() {
     if (!activeOrder) return;
     if (!guardOnline(isOnline)) return;
-    setBusy(true);
+    setActiveOrder((prev) => (prev ? { ...prev, payment_status: 'cash_received' } : prev));
     const { error } = await supabase.rpc('record_cash_payment', { p_order_id: activeOrder.id });
-    setBusy(false);
-    if (error) Alert.alert('Could not record payment', error.message);
-    else load();
+    if (error) {
+      Alert.alert('Could not record payment', error.message);
+      load();
+    }
   }
 
   function openSheet(k: 'F' | 'C' | 'R') {
@@ -145,11 +148,13 @@ function TableDetailScreen() {
     if (!guardOnline(isOnline)) return;
     const next = sheet;
     setSheet('');
-    setBusy(true);
+    setStatus(next);
+    setTable((prev) => (prev ? { ...prev, floor_state: STATUS_TO_FLOOR[next] } : prev));
     const { error } = await supabase.rpc('set_table_floor_state', { p_table_id: id, p_state: STATUS_TO_FLOOR[next] });
-    setBusy(false);
-    if (error) Alert.alert('Could not update table', error.message);
-    else load();
+    if (error) {
+      Alert.alert('Could not update table', error.message);
+      load();
+    }
   }
 
   function openEditTable() {
@@ -290,9 +295,9 @@ function TableDetailScreen() {
               </Pressable>
             </View>
             {activeOrder.payment_status === 'unpaid' ? (
-              <Pressable disabled={busy} onPress={collectCash} style={{ height: 48, borderRadius: radius.pill, backgroundColor: colors.ink900, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <Pressable onPress={collectCash} style={{ height: 48, borderRadius: radius.pill, backgroundColor: colors.ink900, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                 <Icon name="receipt" size={18} color="#FFFFFF" />
-                <Text style={{ fontFamily: fonts.bodyExtraBold, fontSize: 14, color: '#FFFFFF' }}>{busy ? 'Recording…' : `Collect ${formatMinor(activeOrder.total_minor)}`}</Text>
+                <Text style={{ fontFamily: fonts.bodyExtraBold, fontSize: 14, color: '#FFFFFF' }}>{`Collect ${formatMinor(activeOrder.total_minor)}`}</Text>
               </Pressable>
             ) : null}
           </View>

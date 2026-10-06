@@ -16,6 +16,7 @@ import { guardOnline } from '@/lib/offline';
 import { homePathForRole } from '@/lib/roleHome';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts, formatMinor, radius, statusBadge } from '@/theme/tokens';
+import { tenantSubs, useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 type Bill = {
   id: string;
@@ -50,7 +51,6 @@ export default function CashierHome() {
   const [cashCollected, setCashCollected] = useState(0);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
-  const [busy, setBusy] = useState<string | null>(null);
   const [floatOpen, setFloatOpen] = useState(false);
   const [closeOpen, setCloseOpen] = useState(false);
   const [amountText, setAmountText] = useState('');
@@ -83,6 +83,8 @@ export default function CashierHome() {
     setLoading(false);
   }, [membership]);
 
+  useRealtimeRefresh('cashierhometsx', tenantSubs(membership?.tenantId, ['payments', 'staff_shifts']), load);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
     load();
@@ -98,11 +100,13 @@ export default function CashierHome() {
 
   async function collect(bill: Bill, method: 'cash' | 'upi' | 'card') {
     if (!guardOnline(isOnline)) return;
-    setBusy(bill.id);
+    setBills((prev) => prev.filter((b) => b.id !== bill.id));
+    if (method === 'cash') setCashCollected((c) => c + bill.total_minor);
     const { error } = await supabase.rpc('record_cash_payment', { p_order_id: bill.id, p_method: method });
-    setBusy(null);
-    if (error) Alert.alert('Could not record payment', error.message);
-    else load();
+    if (error) {
+      Alert.alert('Could not record payment', error.message);
+      load();
+    }
   }
 
   async function startShift() {
@@ -208,12 +212,11 @@ export default function CashierHome() {
             return (
               <AnimatedPressable
                 key={method}
-                disabled={busy === b.id}
                 onPress={() => collect(b, method)}
                 style={{ flex: 1, height: 44, borderRadius: radius.pill, backgroundColor: primary ? colors.ink900 : colors.surface, borderWidth: primary ? 0 : 1.5, borderColor: colors.inputBorder, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}
               >
                 <Icon name={icon} size={15} color={primary ? '#FFFFFF' : colors.ink900} />
-                <Text style={{ fontFamily: fonts.bodyExtraBold, color: primary ? '#FFFFFF' : colors.ink900, fontSize: 13 }}>{busy === b.id ? '…' : label}</Text>
+                <Text style={{ fontFamily: fonts.bodyExtraBold, color: primary ? '#FFFFFF' : colors.ink900, fontSize: 13 }}>{label}</Text>
               </AnimatedPressable>
             );
           })}

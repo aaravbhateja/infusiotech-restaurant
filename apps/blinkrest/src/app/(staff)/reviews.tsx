@@ -10,6 +10,7 @@ import { useIsOnline } from '@/hooks/useIsOnline';
 import { guardOnline } from '@/lib/offline';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts, radius } from '@/theme/tokens';
+import { tenantSubs, useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 type Review = {
   id: string;
@@ -43,7 +44,6 @@ function ReviewsScreen() {
   const [filter, setFilter] = useState('All');
   const [reviews, setReviews] = useState<Review[]>([]);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [sending, setSending] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const { data } = await supabase
@@ -53,6 +53,8 @@ function ReviewsScreen() {
       .limit(100);
     setReviews(data ?? []);
   }, []);
+
+  useRealtimeRefresh('reviewstsx', tenantSubs(membership?.tenantId, ['reviews']), load);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
@@ -82,15 +84,14 @@ function ReviewsScreen() {
     const text = (drafts[id] ?? '').trim();
     if (!text) return;
     if (!guardOnline(isOnline)) return;
-    setSending(id);
+    setReviews((prev) => prev.map((r) => (r.id === id ? { ...r, reply: text } : r)));
+    setDrafts((prev) => ({ ...prev, [id]: '' }));
     const { error } = await supabase.rpc('reply_to_review', { p_review_id: id, p_reply: text });
-    setSending(null);
     if (error) {
       Alert.alert('Could not send reply', error.message);
-      return;
+      setDrafts((prev) => ({ ...prev, [id]: text }));
+      load();
     }
-    setDrafts((prev) => ({ ...prev, [id]: '' }));
-    load();
   }
 
   const canReply = membership?.permissions.has('reviews.reply') ?? false;
@@ -223,7 +224,7 @@ function ReviewsScreen() {
                     placeholderTextColor={colors.ink500}
                     style={{ flex: 1, height: 44, borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.line, paddingHorizontal: 14, fontSize: 14, color: colors.ink900, fontFamily: fonts.body }}
                   />
-                  <Pressable disabled={sending === r.id} onPress={() => sendReply(r.id)} style={{ height: 44, paddingHorizontal: 16, borderRadius: radius.pill, backgroundColor: colors.coral600, alignItems: 'center', justifyContent: 'center' }}>
+                  <Pressable onPress={() => sendReply(r.id)} style={{ height: 44, paddingHorizontal: 16, borderRadius: radius.pill, backgroundColor: colors.coral600, alignItems: 'center', justifyContent: 'center' }}>
                     <Icon name="send" size={18} color="#FFFFFF" />
                   </Pressable>
                 </View>

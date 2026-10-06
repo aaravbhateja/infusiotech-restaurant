@@ -66,7 +66,6 @@ function OrdersScreen() {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>(FILTERS.find((f) => f === filterParam) ?? 'all');
   const [confirmingReject, setConfirmingReject] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [busyId, setBusyId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -130,35 +129,32 @@ function OrdersScreen() {
   async function advance(order: OrderRow) {
     const next = NEXT_STEP[order.order_status];
     if (!next) return;
-    setBusyId(order.id);
+    setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, order_status: next.status } : o)));
+    setToast(`Order #${order.order_number} marked ${next.status}`);
     const { error } = await supabase.rpc('transition_order_status', {
       p_order_id: order.id,
       p_new_status: next.status,
       p_reason: null,
     });
-    setBusyId(null);
     if (error) {
+      setToast(null);
       Alert.alert('Could not update order', error.message);
-      return;
+      await load();
     }
-    setToast(`Order #${order.order_number} marked ${next.status}`);
-    await load();
   }
 
   async function reject(order: OrderRow, reason: string) {
-    setBusyId(order.id);
+    setConfirmingReject(null);
+    setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, order_status: 'rejected' } : o)));
     const { error } = await supabase.rpc('transition_order_status', {
       p_order_id: order.id,
       p_new_status: 'rejected',
       p_reason: reason,
     });
-    setBusyId(null);
-    setConfirmingReject(null);
     if (error) {
       Alert.alert('Could not reject order', error.message);
-      return;
+      await load();
     }
-    await load();
   }
 
   return (
@@ -305,7 +301,6 @@ function OrdersScreen() {
                 ) : null}
                 {!closed && next ? (
                   <AnimatedPressable
-                    disabled={busyId === item.id}
                     onPress={() => advance(item)}
                     style={{ height: 48, paddingHorizontal: 20, borderRadius: radius.pill, backgroundColor: next.bg, flexDirection: 'row', alignItems: 'center', gap: 6 }}
                   >

@@ -8,6 +8,7 @@ import { RequireAccess } from '@/components/RequireAccess';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts, formatMinor, radius } from '@/theme/tokens';
+import { tenantSubs, useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 type Period = 'monthly' | 'yearly';
 type Plan = { id: string; key: string; name: string; price_monthly_minor: number | null; price_yearly_minor: number | null; entitlements: Record<string, unknown> };
@@ -39,6 +40,8 @@ function SubscriptionScreen() {
     setSub(subRow);
     setInvoices((invoiceRows as unknown as Invoice[]) ?? []);
   }, [membership]);
+
+  useRealtimeRefresh('subscriptiontsx', tenantSubs(membership?.tenantId, ['subscriptions', 'invoices']), load);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount

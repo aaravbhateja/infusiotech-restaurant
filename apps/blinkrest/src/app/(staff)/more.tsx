@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { menuImageUrl } from '@/lib/menuImage';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts } from '@/theme/tokens';
+import { tenantSubs, useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 function initials(text: string) {
   return (
@@ -55,6 +56,8 @@ export default function More() {
     setPlanName(plan?.name ?? null);
     setLogoPath(tenant?.logo_path ?? null);
   }, [membership]);
+
+  useRealtimeRefresh('moretsx', tenantSubs(membership?.tenantId, ['subscriptions']), load);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount

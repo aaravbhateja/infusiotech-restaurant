@@ -16,6 +16,7 @@ import { guardOnline } from '@/lib/offline';
 import { menuImageUrl } from '@/lib/menuImage';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts, formatMinor, radius, shadow } from '@/theme/tokens';
+import { tenantSubs, useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 type Category = { id: string; name: string };
 type MenuItem = {
@@ -53,6 +54,8 @@ function MenuScreen() {
     setItems((menuItems as MenuItem[]) ?? []);
     setLoading(false);
   }, [membership]);
+
+  useRealtimeRefresh('menuindextsx', tenantSubs(membership?.tenantId, ['menu_items', 'menu_categories']), load);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount

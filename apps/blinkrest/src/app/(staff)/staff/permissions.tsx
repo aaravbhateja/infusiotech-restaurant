@@ -10,6 +10,7 @@ import { useIsOnline } from '@/hooks/useIsOnline';
 import { guardOnline } from '@/lib/offline';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts, radius } from '@/theme/tokens';
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 const OWNER_ONLY = new Set(['staff.manage', 'settings.manage', 'subscription.manage', 'ownership.transfer']);
 
@@ -53,7 +54,6 @@ function StaffPermissionsScreen() {
   const [rolePermIds, setRolePermIds] = useState<Set<string>>(new Set());
   const [overrides, setOverrides] = useState<Record<string, 'grant' | 'deny'>>({});
   const [open, setOpen] = useState<Record<string, boolean>>({ orders: true, menu: true, payments: true });
-  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     const [{ data: m }, { data: roleRows }, { data: permRows }] = await Promise.all([
@@ -76,6 +76,8 @@ function StaffPermissionsScreen() {
     setRoles(((roleRows ?? []) as { role_name: string; role_id: string }[]).map((r) => ({ id: r.role_id, name: r.role_name })));
     setPermissions(permRows ?? []);
   }, [membershipId]);
+
+  useRealtimeRefresh('staffpermissionstsx', [{ table: 'tenant_memberships' }], load);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
@@ -110,35 +112,35 @@ function StaffPermissionsScreen() {
     if (!guardOnline(isOnline)) return;
     const wantOn = !perm.on;
     const effect = wantOn === perm.def ? 'clear' : wantOn ? 'grant' : 'deny';
-    setBusy(true);
+    setOverrides((prev) => {
+      const next = { ...prev };
+      if (effect === 'clear') delete next[perm.id];
+      else next[perm.id] = effect;
+      return next;
+    });
     const { error } = await supabase.rpc('set_permission_override', { p_membership_id: membershipId, p_permission_key: perm.key, p_effect: effect });
-    setBusy(false);
     if (error) {
       Alert.alert('Could not update permission', error.message);
-      return;
+      await load();
     }
-    await load();
   }
 
   async function pickRole(roleId: string) {
     if (!guardOnline(isOnline)) return;
-    setBusy(true);
+    setMember((prev) => (prev ? { ...prev, roleId } : prev));
     const { error } = await supabase.rpc('set_membership_role', { p_membership_id: membershipId, p_role_id: roleId });
-    setBusy(false);
-    if (error) {
-      Alert.alert('Could not change role', error.message);
-      return;
-    }
+    if (error) Alert.alert('Could not change role', error.message);
     await load();
   }
 
   async function resetOverrides() {
     if (!guardOnline(isOnline)) return;
-    setBusy(true);
+    setOverrides({});
     const { error } = await supabase.rpc('reset_permission_overrides', { p_membership_id: membershipId });
-    setBusy(false);
-    if (error) Alert.alert('Could not reset', error.message);
-    else await load();
+    if (error) {
+      Alert.alert('Could not reset', error.message);
+      await load();
+    }
   }
 
   function confirmSuspendOrRevoke(kind: 'suspended' | 'revoked') {
@@ -206,7 +208,6 @@ function StaffPermissionsScreen() {
               return (
                 <Pressable
                   key={r.id}
-                  disabled={busy}
                   onPress={() => !on && pickRole(r.id)}
                   style={{ width: '48%', minHeight: 64, borderRadius: 18, borderWidth: on ? 2 : 1.5, borderColor: on ? colors.ink900 : '#E4D8D0', backgroundColor: colors.surface, paddingHorizontal: 12, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 10 }}
                 >
@@ -273,7 +274,7 @@ function StaffPermissionsScreen() {
                       </View>
                       <Text style={{ fontSize: 12, color: colors.ink500, marginTop: 1 }}>{p.key}</Text>
                     </View>
-                    <Pressable disabled={g.locked || busy} onPress={() => toggle(p)}>
+                    <Pressable disabled={g.locked} onPress={() => toggle(p)}>
                       <View style={{ width: 48, height: 28, borderRadius: 14, backgroundColor: p.on ? colors.success : g.locked ? '#EFE8E3' : '#D8CCC4', padding: 3, alignItems: p.on ? 'flex-end' : 'flex-start' }}>
                         <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#FFFFFF' }} />
                       </View>

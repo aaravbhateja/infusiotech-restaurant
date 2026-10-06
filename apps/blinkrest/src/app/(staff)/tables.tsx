@@ -10,6 +10,7 @@ import { TableQrSheet } from '@/components/TableQrSheet';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts, radius, shadow } from '@/theme/tokens';
+import { tenantSubs, useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 type TableRow = {
   id: string;
@@ -58,6 +59,8 @@ function TablesScreen() {
       })),
     );
   }, []);
+
+  useRealtimeRefresh('tablestsx', tenantSubs(membership?.tenantId, ['restaurant_tables', 'orders']), load);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
