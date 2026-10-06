@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/Icon';
 import { RequireAccess } from '@/components/RequireAccess';
+import { ConfirmDialog } from '@/components/States';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsOnline } from '@/hooks/useIsOnline';
 import { guardOnline } from '@/lib/offline';
@@ -85,9 +86,15 @@ function StaffScreen() {
     };
   }, [membership, load]);
 
+  const [revoking, setRevoking] = useState<Invite | null>(null);
+  const [revokeBusy, setRevokeBusy] = useState(false);
+
   async function revokeInvite(id: string) {
     if (!guardOnline(isOnline)) return;
+    setRevokeBusy(true);
     const { error } = await supabase.from('staff_invitations').update({ status: 'revoked' }).eq('id', id);
+    setRevokeBusy(false);
+    setRevoking(null);
     if (error) {
       Alert.alert('Could not revoke invite', error.message);
       return;
@@ -162,7 +169,7 @@ function StaffScreen() {
                   </View>
                 </View>
                 <Pressable
-                  onPress={() => revokeInvite(inv.id)}
+                  onPress={() => setRevoking(inv)}
                   style={{ height: 42, borderRadius: radius.pill, borderWidth: 1.5, borderColor: '#F4C7C1', alignItems: 'center', justifyContent: 'center' }}
                 >
                   <Text style={{ fontFamily: fonts.bodyExtraBold, color: colors.error }}>Revoke</Text>
@@ -211,6 +218,16 @@ function StaffScreen() {
           </View>
         </View>
       </ScrollView>
+      <ConfirmDialog
+        visible={!!revoking}
+        title={`Revoke ${revoking?.display_name ?? revoking?.contact ?? 'this'} invite?`}
+        bullets={['The invite code stops working right away.', 'Nothing changes for anyone already on the team.', 'You can invite them again later.']}
+        confirmLabel="Revoke"
+        icon="send"
+        busy={revokeBusy}
+        onCancel={() => setRevoking(null)}
+        onConfirm={() => revoking && revokeInvite(revoking.id)}
+      />
     </SafeAreaView>
   );
 }

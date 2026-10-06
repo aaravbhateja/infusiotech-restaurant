@@ -1,10 +1,13 @@
 import { Redirect, router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Image, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Image, Pressable, RefreshControl, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Rect } from 'react-native-svg';
 
 import { BottomNav } from '@/components/BottomNav';
 import { Icon } from '@/components/Icon';
+import { Skeleton } from '@/components/Skeleton';
+import { ErrorState } from '@/components/States';
 import { useAuth } from '@/hooks/useAuth';
 import { menuImageUrl } from '@/lib/menuImage';
 import { homePathForRole } from '@/lib/roleHome';
@@ -35,26 +38,77 @@ export default function Home() {
   );
   const [refreshing, setRefreshing] = useState(false);
   const [logoPath, setLogoPath] = useState<string | null>(null);
+  const { width } = useWindowDimensions();
+  const [loadingFirst, setLoadingFirst] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [firstName, setFirstName] = useState<string | null>(null);
+  const [lastWeekRevenue, setLastWeekRevenue] = useState(0);
+  const [lastWeekCount, setLastWeekCount] = useState(0);
+  const [chartRange, setChartRange] = useState<'Today' | 'Week' | 'Month'>('Week');
+  const [recent, setRecent] = useState<{ created_at: string; total_minor: number; order_status: string; customer_id: string | null; items: { item_name_snapshot: string; quantity: number; line_total_minor: number }[] }[]>([]);
+  const [tables, setTables] = useState<{ id: string; floor_state: string }[]>([]);
+  const [occupiedIds, setOccupiedIds] = useState<Set<string>>(new Set());
+  const [pay, setPay] = useState<{ method: string; amount: number }[]>([]);
+  const [pendingMinor, setPendingMinor] = useState(0);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [customers, setCustomers] = useState<{ id: string; name: string | null }[]>([]);
 
   const load = useCallback(async () => {
     if (membership) {
       const { data: tenant } = await supabase.from('tenants').select('logo_path').eq('id', membership.tenantId).maybeSingle();
       setLogoPath(tenant?.logo_path ?? null);
+      const { data: u } = await supabase.from('users').select('display_name').eq('id', (await supabase.auth.getUser()).data.user?.id ?? '').maybeSingle();
+      setFirstName(u?.display_name?.split(' ')[0] ?? null);
     }
 
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
 
-    const { data: todayOrders } = await supabase
+    const monthAgo = new Date(startOfDay.getTime() - 29 * 86400000);
+    const weekAgoStart = new Date(startOfDay.getTime() - 7 * 86400000);
+    const { data: window, error: windowError } = await supabase
       .from('orders')
-      .select('total_minor')
-      .gte('created_at', startOfDay.toISOString())
+      .select('total_minor, created_at, order_status, customer_id, items:order_items(item_name_snapshot, quantity, line_total_minor)')
+      .gte('created_at', monthAgo.toISOString())
       .not('order_status', 'in', '(rejected,cancelled)');
+    if (windowError) {
+      setFailed(true);
+      setLoadingFirst(false);
+      return;
+    }
+    setFailed(false);
+    const all = (window ?? []) as unknown as typeof recent;
+    setRecent(all);
 
-    const total = (todayOrders ?? []).reduce((sum, o) => sum + o.total_minor, 0);
+    const todayOrders = all.filter((o) => new Date(o.created_at) >= startOfDay);
+    const total = todayOrders.reduce((sum, o) => sum + o.total_minor, 0);
     setRevenue(total);
-    setOrderCount(todayOrders?.length ?? 0);
-    setAvgOrder(todayOrders?.length ? Math.round(total / todayOrders.length) : 0);
+    setOrderCount(todayOrders.length);
+    setAvgOrder(todayOrders.length ? Math.round(total / todayOrders.length) : 0);
+
+    const sameDayLastWeek = all.filter((o) => {
+      const t = new Date(o.created_at).getTime();
+      return t >= weekAgoStart.getTime() && t < weekAgoStart.getTime() + 86400000;
+    });
+    setLastWeekRevenue(sameDayLastWeek.reduce((s, o) => s + o.total_minor, 0));
+    setLastWeekCount(sameDayLastWeek.length);
+
+    const [{ data: tbl }, { data: openOrders }, { data: pays }, { data: unpaid }, { data: cust }] = await Promise.all([
+      supabase.from('restaurant_tables').select('id, floor_state').eq('status', 'active').order('label'),
+      supabase.from('orders').select('table_id').in('order_status', ['new', 'accepted', 'preparing', 'ready', 'served']).eq('payment_status', 'unpaid').not('table_id', 'is', null),
+      supabase.from('payments').select('amount_minor, method').in('status', ['paid', 'cash_received', 'reconciled']).gte('created_at', startOfDay.toISOString()),
+      supabase.from('orders').select('total_minor').eq('payment_status', 'unpaid').not('order_status', 'in', '(rejected,cancelled)'),
+      supabase.from('customers').select('id, name').order('created_at', { ascending: false }).limit(4),
+    ]);
+    setTables((tbl ?? []) as { id: string; floor_state: string }[]);
+    setOccupiedIds(new Set((openOrders ?? []).map((o) => o.table_id as string)));
+    const byMethod = new Map<string, number>();
+    for (const p of pays ?? []) byMethod.set(p.method ?? 'other', (byMethod.get(p.method ?? 'other') ?? 0) + p.amount_minor);
+    setPay([...byMethod.entries()].map(([method, amount]) => ({ method, amount })).sort((a, b) => b.amount - a.amount));
+    setPendingMinor((unpaid ?? []).reduce((s, o) => s + o.total_minor, 0));
+    setPendingCount(unpaid?.length ?? 0);
+    setCustomers((cust ?? []) as { id: string; name: string | null }[]);
+    setLoadingFirst(false);
 
     const { data: active } = await supabase
       .from('orders')
@@ -91,24 +145,87 @@ export default function Home() {
     ready: activeOrders.filter((o) => o.order_status === 'ready').length,
   };
 
+  const pct = (cur: number, prev: number) => (prev > 0 ? ((cur - prev) / prev) * 100 : null);
+  const revDelta = pct(revenue, lastWeekRevenue);
+  const countDelta = pct(orderCount, lastWeekCount);
+
   const metrics = [
-    { label: "Today's revenue", value: formatMinor(revenue), icon: 'rupee' as const, tint: colors.coral50, ink: colors.coral600 },
-    { label: 'Total orders', value: String(orderCount), icon: 'orders' as const, tint: '#EAF1FF', ink: '#1F5BD6' },
-    { label: 'Active now', value: String(activeOrders.length), icon: 'timer' as const, tint: colors.saffron50, ink: '#8A5A00' },
-    { label: 'Avg order value', value: formatMinor(avgOrder), icon: 'receipt' as const, tint: '#F1EBFF', ink: '#5B21B6' },
+    { label: "Today's revenue", value: formatMinor(revenue), icon: 'rupee' as const, tint: colors.coral50, ink: colors.coral600, delta: revDelta, sub: lastWeekRevenue ? `vs ${formatMinor(lastWeekRevenue)} last week` : 'No data last week' },
+    { label: 'Total orders', value: String(orderCount), icon: 'orders' as const, tint: '#EAF1FF', ink: '#1F5BD6', delta: countDelta, sub: lastWeekCount ? `${orderCount - lastWeekCount >= 0 ? '+' : ''}${orderCount - lastWeekCount} vs last week` : 'No data last week' },
+    { label: 'Pending bills', value: String(pendingCount), icon: 'timer' as const, tint: colors.saffron50, ink: '#8A5A00', delta: null, sub: `${formatMinor(pendingMinor)} to collect` },
+    { label: 'Avg order value', value: formatMinor(avgOrder), icon: 'receipt' as const, tint: '#F1EBFF', ink: '#5B21B6', delta: null, sub: `${activeOrders.length} active now` },
   ];
 
   const actions = [
+    { label: 'Add menu item', icon: 'plus' as const, bg: colors.coral50, fg: colors.coral600, onPress: () => router.push('/(staff)/menu/new') },
     { label: 'Live orders', icon: 'bolt' as const, bg: colors.ink900, fg: colors.saffron400, onPress: () => router.push('/(staff)/orders') },
     { label: 'Manage tables', icon: 'tables' as const, bg: colors.successBg, fg: colors.success, onPress: () => router.push('/(staff)/tables') },
-    { label: 'More', icon: 'more' as const, bg: '#EAF1FF', fg: '#1F5BD6', onPress: () => router.push('/(staff)/more') },
+    { label: 'Invite staff', icon: 'users' as const, bg: '#EAF1FF', fg: '#1F5BD6', onPress: () => router.push('/(staff)/staff/invite') },
+    { label: 'Create offer', icon: 'percent' as const, bg: colors.saffron50, fg: '#8A5A00', onPress: () => router.push('/(staff)/offers/create') },
+    { label: 'View reports', icon: 'chart' as const, bg: '#F1EBFF', fg: '#5B21B6', onPress: () => router.push('/(staff)/analytics') },
   ];
+
+  const chartW = Math.min(width - 40 - 36, 460);
+  const chartDays = chartRange === 'Today' ? 1 : chartRange === 'Week' ? 7 : 30;
+  const dayStart0 = new Date();
+  dayStart0.setHours(0, 0, 0, 0);
+  const buckets = Array.from({ length: chartRange === 'Today' ? 24 : chartDays }, (_, i) => {
+    if (chartRange === 'Today') {
+      const s = dayStart0.getTime() + i * 3600000;
+      return { v: recent.filter((o) => { const t = new Date(o.created_at).getTime(); return t >= s && t < s + 3600000; }).reduce((a, o) => a + o.total_minor, 0), label: i % 6 === 0 ? `${i}h` : '' };
+    }
+    const s = dayStart0.getTime() - (chartDays - 1 - i) * 86400000;
+    return { v: recent.filter((o) => { const t = new Date(o.created_at).getTime(); return t >= s && t < s + 86400000; }).reduce((a, o) => a + o.total_minor, 0), label: chartRange === 'Week' ? new Date(s).toLocaleDateString('en-IN', { weekday: 'short' }) : i % 5 === 0 ? String(new Date(s).getDate()) : '' };
+  });
+  const chartTotal = buckets.reduce((a, b) => a + b.v, 0);
+  const maxBucket = Math.max(1, ...buckets.map((b) => b.v));
+  const bw = chartW / buckets.length - 3;
+
+  const itemTotals = new Map<string, { qty: number; total: number }>();
+  for (const o of recent.filter((o) => new Date(o.created_at) >= dayStart0)) {
+    for (const it of o.items) {
+      const p = itemTotals.get(it.item_name_snapshot) ?? { qty: 0, total: 0 };
+      itemTotals.set(it.item_name_snapshot, { qty: p.qty + it.quantity, total: p.total + it.line_total_minor });
+    }
+  }
+  const topItems = [...itemTotals.entries()].sort((a, b) => b[1].total - a[1].total).slice(0, 5);
+
+  const occupiedCount = tables.filter((t) => occupiedIds.has(t.id)).length;
+  const reservedCount = tables.filter((t) => !occupiedIds.has(t.id) && t.floor_state === 'reserved').length;
+  const cleaningCount = tables.filter((t) => !occupiedIds.has(t.id) && t.floor_state === 'cleaning').length;
+  const freeCount = tables.length - occupiedCount - reservedCount - cleaningCount;
+  const payTotal = pay.reduce((s, p) => s + p.amount, 0);
+  const PAY_COLORS = [colors.coral500, colors.ink900, colors.saffron400, colors.info];
+  const PAY_LABEL: Record<string, string> = { upi: 'UPI', card: 'Card', cash: 'Cash', netbanking: 'Netbanking', wallet: 'Wallet' };
 
   // This screen is Owner's default home (and the fallback for any
   // unrecognised role) — every other role has its own home and must not
   // land here just by navigating to it directly.
   const correctHome = homePathForRole(membership?.roleName);
   if (correctHome !== '/(staff)/home') return <Redirect href={correctHome} />;
+
+  if (failed || loadingFirst) {
+    return (
+      <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.bg }}>
+        <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
+          <Text style={{ fontSize: 26, fontFamily: fonts.display, color: colors.ink900 }}>{membership?.tenantName}</Text>
+          {failed ? (
+            <ErrorState icon="home" title="We couldn’t load your dashboard" code="BR-503" onRetry={() => { setFailed(false); setLoadingFirst(true); load(); }} onContact={() => router.push('/(staff)/support')} />
+          ) : (
+            <>
+              <Skeleton style={{ height: 190, borderRadius: 26 }} />
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                {[0, 1, 2, 3].map((i) => (
+                  <Skeleton key={i} style={{ width: '47%', height: 110, borderRadius: 22 }} />
+                ))}
+              </View>
+            </>
+          )}
+        </ScrollView>
+        <BottomNav active="home" />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -166,7 +283,7 @@ export default function Home() {
             {new Date().toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}
           </Text>
           <Text style={{ fontSize: 32, fontFamily: fonts.display, color: colors.ink900, letterSpacing: -1 }}>
-            Good {greeting}!
+            Good {greeting}{firstName ? `, ${firstName}` : ''}!
           </Text>
           <Text style={{ fontSize: 15, color: colors.ink700, fontFamily: fonts.body }}>
             Here&apos;s what&apos;s happening at {membership?.tenantName} today.
@@ -265,12 +382,20 @@ export default function Home() {
                 ...shadow.card,
               }}
             >
-              <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: m.tint, alignItems: 'center', justifyContent: 'center' }}>
-                <Icon name={m.icon} size={20} stroke={2.1} color={m.ink} />
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: m.tint, alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon name={m.icon} size={20} stroke={2.1} color={m.ink} />
+                </View>
+                {m.delta != null ? (
+                  <View style={{ height: 22, paddingHorizontal: 7, borderRadius: radius.pill, backgroundColor: m.delta >= 0 ? colors.successBg : colors.errorBg, justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 11, fontFamily: fonts.bodyExtraBold, color: m.delta >= 0 ? colors.success : colors.error }}>{m.delta >= 0 ? '▲' : '▼'} {Math.abs(m.delta).toFixed(1)}%</Text>
+                  </View>
+                ) : null}
               </View>
               <View>
                 <Text style={{ fontSize: 24, fontFamily: fonts.display, color: colors.ink900 }}>{m.value}</Text>
                 <Text style={{ fontSize: 13, fontFamily: fonts.bodyBold, color: colors.ink900, marginTop: 2 }}>{m.label}</Text>
+                <Text style={{ fontSize: 11, color: colors.ink500, marginTop: 1 }}>{m.sub}</Text>
               </View>
             </View>
           ))}
@@ -279,13 +404,14 @@ export default function Home() {
         {/* Quick actions */}
         <View style={{ gap: 12 }}>
           <Text style={{ fontSize: 20, fontFamily: fonts.display, color: colors.ink900 }}>Quick actions</Text>
-          <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
             {actions.map((a) => (
               <View
                 key={a.label}
                 onTouchEnd={a.onPress}
                 style={{
-                  flex: 1,
+                  width: '31%',
+                  flexGrow: 1,
                   minHeight: 100,
                   backgroundColor: colors.surface,
                   borderRadius: 20,
@@ -304,6 +430,134 @@ export default function Home() {
             ))}
           </View>
         </View>
+
+        {/* Revenue overview */}
+        <View style={{ backgroundColor: colors.surface, borderRadius: 24, borderWidth: 1, borderColor: '#F4ECE6', padding: 18, gap: 12 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={{ fontSize: 17, fontFamily: fonts.display, color: colors.ink900 }}>Revenue overview</Text>
+            <View style={{ flexDirection: 'row', backgroundColor: '#F7F1EC', borderRadius: radius.pill, padding: 3 }}>
+              {(['Today', 'Week', 'Month'] as const).map((r) => (
+                <Pressable key={r} onPress={() => setChartRange(r)} style={{ height: 28, paddingHorizontal: 10, borderRadius: radius.pill, backgroundColor: chartRange === r ? colors.ink900 : 'transparent', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 11.5, fontFamily: fonts.bodyExtraBold, color: chartRange === r ? '#FFFFFF' : colors.ink700 }}>{r}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+          <Text style={{ fontSize: 28, fontFamily: fonts.display, color: colors.ink900 }}>{formatMinor(chartTotal)}</Text>
+          <Svg width={chartW} height={110}>
+            {buckets.map((b, i) => {
+              const h = (b.v / maxBucket) * 96;
+              return <Rect key={i} x={i * (bw + 3)} y={110 - h} width={Math.max(2, bw)} height={Math.max(h, b.v ? 3 : 0)} rx={4} fill={i === buckets.length - 1 ? colors.coral500 : '#FFD3C5'} />;
+            })}
+          </Svg>
+          <View style={{ flexDirection: 'row' }}>
+            {buckets.map((b, i) => (
+              <Text key={i} style={{ flex: 1, textAlign: 'center', fontSize: 10, fontFamily: fonts.bodyBold, color: colors.ink500 }}>{b.label}</Text>
+            ))}
+          </View>
+        </View>
+
+        {/* Top-selling items */}
+        {topItems.length > 0 ? (
+          <View style={{ backgroundColor: colors.surface, borderRadius: 24, borderWidth: 1, borderColor: '#F4ECE6', padding: 18, gap: 12 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <Text style={{ fontSize: 17, fontFamily: fonts.display, color: colors.ink900 }}>Top-selling items</Text>
+              <Pressable onPress={() => router.push('/(staff)/analytics')}>
+                <Text style={{ fontSize: 12, fontFamily: fonts.bodyExtraBold, color: colors.coral600 }}>See all</Text>
+              </Pressable>
+            </View>
+            {topItems.map(([name, v]) => (
+              <View key={name} style={{ gap: 6 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text numberOfLines={1} style={{ flex: 1, fontSize: 14, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>{name}</Text>
+                  <Text style={{ fontSize: 14, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>{formatMinor(v.total)}</Text>
+                </View>
+                <View style={{ height: 6, borderRadius: 3, backgroundColor: colors.line }}>
+                  <View style={{ height: 6, borderRadius: 3, backgroundColor: colors.coral500, width: `${Math.max(4, (v.total / topItems[0][1].total) * 100)}%` }} />
+                </View>
+                <Text style={{ fontSize: 11, color: colors.ink500 }}>{v.qty} sold today</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        {/* Table occupancy */}
+        {tables.length > 0 ? (
+          <View style={{ backgroundColor: colors.surface, borderRadius: 24, borderWidth: 1, borderColor: '#F4ECE6', padding: 18, gap: 12 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View>
+                <Text style={{ fontSize: 17, fontFamily: fonts.display, color: colors.ink900 }}>Table occupancy</Text>
+                <Text style={{ fontSize: 12, color: colors.ink500 }}>{occupiedCount} of {tables.length} tables seated</Text>
+              </View>
+              <Text style={{ fontSize: 26, fontFamily: fonts.display, color: colors.coral600 }}>{Math.round((occupiedCount / tables.length) * 100)}%</Text>
+            </View>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+              {tables.map((t) => {
+                const occ = occupiedIds.has(t.id);
+                const bg = occ ? colors.coral500 : t.floor_state === 'reserved' ? colors.infoBg : t.floor_state === 'cleaning' ? colors.saffron50 : colors.successBg;
+                const bd = occ ? colors.coral500 : t.floor_state === 'reserved' ? colors.info : t.floor_state === 'cleaning' ? colors.saffron400 : '#8FD3AE';
+                return <View key={t.id} style={{ width: 22, height: 22, borderRadius: 6, backgroundColor: bg, borderWidth: 1.5, borderColor: bd, borderStyle: t.floor_state === 'cleaning' && !occ ? 'dashed' : 'solid' }} />;
+              })}
+            </View>
+            <Text style={{ fontSize: 11, color: colors.ink500 }}>Occupied {occupiedCount} · Reserved {reservedCount} · Cleaning {cleaningCount} · Free {freeCount}</Text>
+            <Pressable onPress={() => router.push('/(staff)/tables')} style={{ height: 40, borderRadius: radius.pill, backgroundColor: colors.coral50, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: 13, fontFamily: fonts.bodyExtraBold, color: colors.coral600 }}>Manage tables</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {/* Payment breakdown */}
+        {pay.length > 0 ? (
+          <View style={{ backgroundColor: colors.surface, borderRadius: 24, borderWidth: 1, borderColor: '#F4ECE6', padding: 18, gap: 12 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <Text style={{ fontSize: 17, fontFamily: fonts.display, color: colors.ink900 }}>Payment breakdown</Text>
+              <Pressable onPress={() => router.push('/(staff)/payments/index')}>
+                <Text style={{ fontSize: 12, fontFamily: fonts.bodyExtraBold, color: colors.coral600 }}>Payments</Text>
+              </Pressable>
+            </View>
+            <View style={{ flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', gap: 2 }}>
+              {pay.slice(0, 4).map((p, i) => (
+                <View key={p.method} style={{ flex: p.amount, backgroundColor: PAY_COLORS[i] }} />
+              ))}
+            </View>
+            {pay.slice(0, 4).map((p, i) => (
+              <View key={p.method} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: PAY_COLORS[i] }} />
+                <Text style={{ flex: 1, fontSize: 13, color: colors.ink700 }}>{PAY_LABEL[p.method] ?? p.method}</Text>
+                <Text style={{ fontSize: 12, color: colors.ink500 }}>{Math.round((p.amount / Math.max(1, payTotal)) * 100)}%</Text>
+                <Text style={{ fontSize: 13, fontFamily: fonts.bodyBold, color: colors.ink900, minWidth: 74, textAlign: 'right' }}>{formatMinor(p.amount)}</Text>
+              </View>
+            ))}
+            {pendingCount > 0 ? (
+              <View style={{ backgroundColor: colors.saffron50, borderRadius: radius.md, padding: 10, flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                <Icon name="timer" size={15} color={colors.warning} />
+                <Text style={{ flex: 1, fontSize: 12, fontFamily: fonts.bodyBold, color: colors.warning }}>{formatMinor(pendingMinor)} pending on {pendingCount} open bills</Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* Recent customers */}
+        {customers.length > 0 ? (
+          <View style={{ gap: 10 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <Text style={{ fontSize: 17, fontFamily: fonts.display, color: colors.ink900 }}>Recent customers</Text>
+              <Pressable onPress={() => router.push('/(staff)/customers/index')}>
+                <Text style={{ fontSize: 12, fontFamily: fonts.bodyExtraBold, color: colors.coral600 }}>View all</Text>
+              </Pressable>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              {customers.map((c, i) => (
+                <Pressable key={c.id} onPress={() => router.push({ pathname: '/(staff)/customers/[id]', params: { id: c.id } })} style={{ flex: 1, backgroundColor: colors.surface, borderRadius: 18, borderWidth: 1, borderColor: '#F4ECE6', padding: 10, alignItems: 'center', gap: 6 }}>
+                  <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: ['#FFD3C5', '#D6E4FF', '#FFE9A8', '#CDEFD9'][i % 4], alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 13, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>{initials(c.name ?? '?')}</Text>
+                  </View>
+                  <Text numberOfLines={1} style={{ fontSize: 11.5, fontFamily: fonts.bodyBold, color: colors.ink900 }}>{c.name ?? 'Guest'}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ) : null}
       </ScrollView>
       <BottomNav active="home" />
     </SafeAreaView>

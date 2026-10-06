@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/Button';
 import { Icon } from '@/components/Icon';
 import { RequireAccess } from '@/components/RequireAccess';
+import { FormErrorBanner } from '@/components/States';
 import { TextField } from '@/components/TextField';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsOnline } from '@/hooks/useIsOnline';
@@ -25,6 +26,7 @@ function InviteStaffScreen() {
   const [contact, setContact] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
   const [rawToken, setRawToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -37,8 +39,17 @@ function InviteStaffScreen() {
     });
   }, [membership]);
 
+  const trimmed = contact.trim();
+  const looksLikeEmail = /^[^s@]+@[^s@]+.[^s@]+$/.test(trimmed);
+  const looksLikePhone = trimmed.replace(/D/g, '').length >= 10;
+  const contactError = !trimmed ? 'Enter a phone number or email.' : looksLikeEmail || looksLikePhone ? null : 'Enter all 10 digits of the phone number, or a valid email.';
+  const roleError = roleId ? null : 'Choose a role — it sets their permissions.';
+  const problems = [contactError, roleError].filter(Boolean).length;
+
   async function invite() {
-    if (!membership || !roleId || !contact.trim()) return;
+    setSubmitted(true);
+    if (problems > 0) return;
+    if (!membership || !roleId) return;
     if (!guardOnline(isOnline)) return;
     setSaving(true);
     setError(null);
@@ -113,7 +124,8 @@ function InviteStaffScreen() {
 
       <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
         <TextField label="Name" value={name} onChangeText={setName} placeholder="e.g. Rohit Saini" autoCapitalize="words" />
-        <TextField label="Phone or email" value={contact} onChangeText={setContact} placeholder="+91XXXXXXXXXX or email" error={error ?? undefined} />
+        <FormErrorBanner message={submitted && problems > 0 ? `Fix ${problems} field${problems > 1 ? "s" : ""} to send the invite` : null} />
+        <TextField label="Phone or email" value={contact} onChangeText={setContact} placeholder="+91XXXXXXXXXX or email" error={(submitted ? contactError : null) ?? error ?? undefined} />
 
         <View style={{ gap: 8 }}>
           <Text style={{ fontSize: 13, fontFamily: fonts.bodyBold, color: colors.ink900 }}>Role</Text>
@@ -139,9 +151,10 @@ function InviteStaffScreen() {
               );
             })}
           </View>
+          {submitted && roleError ? <Text style={{ fontSize: 12, color: colors.error }}>{roleError}</Text> : null}
         </View>
 
-        <Button title={saving ? 'Creating...' : 'Create invite'} onPress={invite} loading={saving} disabled={!contact.trim() || !roleId} />
+        <Button title={saving ? 'Creating...' : 'Create invite'} onPress={invite} loading={saving} />
       </ScrollView>
     </SafeAreaView>
   );

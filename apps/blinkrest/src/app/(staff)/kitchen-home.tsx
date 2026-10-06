@@ -147,7 +147,9 @@ export default function KitchenHome() {
                   onPress={() => setStation(s)}
                   style={{ height: 38, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: active ? colors.saffron400 : DARK.card, justifyContent: 'center' }}
                 >
-                  <Text style={{ fontSize: 13, fontFamily: fonts.bodyExtraBold, color: active ? colors.ink900 : '#E9E1DC', textTransform: 'capitalize' }}>{s}</Text>
+                  <Text style={{ fontSize: 13, fontFamily: fonts.bodyExtraBold, color: active ? colors.ink900 : '#E9E1DC', textTransform: 'capitalize' }}>
+                    {s === 'all' ? 'All stations' : s} · {s === 'all' ? tickets.length : tickets.filter((t) => t.items.some((i) => i.station === s)).length}
+                  </Text>
                 </AnimatedPressable>
               );
             })}
@@ -198,7 +200,15 @@ export default function KitchenHome() {
         })}
 
         {visibleTickets.length === 0 ? (
-          <Text style={{ textAlign: 'center', color: DARK.sub, padding: 24 }}>No active tickets — new accepted orders show up here.</Text>
+          <View style={{ alignItems: 'center', padding: 32, gap: 10 }}>
+            <View style={{ width: 72, height: 72, borderRadius: 24, backgroundColor: DARK.card, alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name="chef" size={32} stroke={1.8} color={colors.saffron400} />
+            </View>
+            <Text style={{ fontSize: 18, fontFamily: fonts.display, color: DARK.text }}>Kitchen is clear</Text>
+            <Text style={{ textAlign: 'center', color: DARK.sub, fontSize: 13 }}>
+              {station === 'all' ? 'New accepted orders show up here the moment they arrive.' : `No tickets for ${station} right now.`}
+            </Text>
+          </View>
         ) : null}
       </ScrollView>
       <BottomNav active="home" />

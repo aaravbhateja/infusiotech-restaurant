@@ -8,6 +8,8 @@ import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { BottomNav } from '@/components/BottomNav';
 import { Icon, type IconName } from '@/components/Icon';
 import { RequireAccess } from '@/components/RequireAccess';
+import { Skeleton } from '@/components/Skeleton';
+import { EmptyState, ErrorState, Snackbar } from '@/components/States';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts, formatMinor, radius, shadow } from '@/theme/tokens';
@@ -64,15 +66,24 @@ function OrdersScreen() {
   const [confirmingReject, setConfirmingReject] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('orders')
       .select(
         'id, order_number, order_status, payment_status, total_minor, currency, created_at, table:restaurant_tables(label)',
       )
       .order('created_at', { ascending: false })
       .limit(100);
+    setLoading(false);
+    if (error) {
+      setFailed(true);
+      return;
+    }
+    setFailed(false);
     setOrders((data as unknown as OrderRow[]) ?? []);
   }, []);
 
@@ -127,6 +138,7 @@ function OrdersScreen() {
       Alert.alert('Could not update order', error.message);
       return;
     }
+    setToast(`Order #${order.order_number} marked ${next.status}`);
     await load();
   }
 
@@ -207,6 +219,23 @@ function OrdersScreen() {
         keyExtractor={(o) => o.id}
         contentContainerStyle={{ padding: 20, paddingTop: 10, gap: 12, paddingBottom: 24 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.coral600} />}
+        ListEmptyComponent={
+          loading ? (
+            <View style={{ gap: 12 }}>
+              {[0, 1, 2].map((i) => (
+                <View key={i} style={{ backgroundColor: colors.surface, borderRadius: 22, borderWidth: 1, borderColor: '#F4ECE6', padding: 14, gap: 10 }}>
+                  <Skeleton style={{ width: '45%', height: 18 }} />
+                  <Skeleton style={{ width: '75%', height: 14 }} />
+                  <Skeleton style={{ width: '100%', height: 44, borderRadius: 22 }} />
+                </View>
+              ))}
+            </View>
+          ) : failed ? (
+            <ErrorState icon="orders" title="We couldn’t load your orders" body="Check your connection and try again. Nothing has been lost." onRetry={load} />
+          ) : (
+            <EmptyState icon="orders" title={filter === 'all' ? 'No orders yet' : `No ${filter} orders`} body="New orders appear here the moment a guest places one." />
+          )
+        }
         renderItem={({ item, index }) => {
           const status = STATUS_META[item.order_status] ?? STATUS_META.new;
           const nextStep = NEXT_STEP[item.order_status];
@@ -315,17 +344,6 @@ function OrdersScreen() {
             </Animated.View>
           );
         }}
-        ListEmptyComponent={
-          <Animated.View entering={FadeInDown} style={{ borderWidth: 1.5, borderColor: colors.inputBorder, borderStyle: 'dashed', borderRadius: 22, padding: 28, alignItems: 'center', gap: 8 }}>
-            <View style={{ width: 56, height: 56, borderRadius: 18, backgroundColor: colors.saffron50, alignItems: 'center', justifyContent: 'center' }}>
-              <Icon name="orders" size={28} color="#8A5A00" />
-            </View>
-            <Text style={{ fontSize: 16, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>Nothing here right now</Text>
-            <Text style={{ fontSize: 13, color: colors.ink500, textAlign: 'center' }}>
-              Orders in this status will appear the moment they change.
-            </Text>
-          </Animated.View>
-        }
       />
       {membership?.permissions.has('orders.create') ? (
         <AnimatedPressable
@@ -336,6 +354,7 @@ function OrdersScreen() {
           <Text style={{ color: '#FFFFFF', fontFamily: fonts.bodyExtraBold, fontSize: 16 }}>New order</Text>
         </AnimatedPressable>
       ) : null}
+      <Snackbar message={toast} onDismiss={() => setToast(null)} />
       <BottomNav active="orders" />
     </SafeAreaView>
   );

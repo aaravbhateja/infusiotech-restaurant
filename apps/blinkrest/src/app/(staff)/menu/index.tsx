@@ -9,6 +9,7 @@ import { BottomNav } from '@/components/BottomNav';
 import { Icon } from '@/components/Icon';
 import { RequireAccess } from '@/components/RequireAccess';
 import { MenuItemSkeleton } from '@/components/Skeleton';
+import { EmptyState } from '@/components/States';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsOnline } from '@/hooks/useIsOnline';
 import { guardOnline } from '@/lib/offline';
@@ -237,7 +238,16 @@ function MenuScreen() {
             </View>
           </Animated.View>
         ))}
-        {!loading && visible.length === 0 ? (
+        {!loading && items.length === 0 ? (
+          <EmptyState
+            icon="menu"
+            title="Your menu is empty"
+            body="Add your dishes one by one — guests see them the moment you save."
+            actionLabel="Add first dish"
+            onAction={() => router.push('/(staff)/menu/new')}
+          />
+        ) : null}
+        {!loading && items.length > 0 && visible.length === 0 ? (
           <Animated.View entering={FadeInDown} style={{ borderWidth: 1.5, borderColor: colors.inputBorder, borderStyle: 'dashed', borderRadius: 22, padding: 28, alignItems: 'center', gap: 8 }}>
             <Text style={{ fontSize: 16, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>No dishes match</Text>
             <Text style={{ fontSize: 13, color: colors.ink500, textAlign: 'center' }}>Try another name or add it as a new item.</Text>

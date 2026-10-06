@@ -345,7 +345,6 @@ export function PublicOrderScreen({ token, previewTenantId, onBack }: { token?: 
     let cancelled = false;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- seeding live status from the just-placed order
     setLiveStatus(confirmation.order_status);
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- seeding live payment status from the just-placed order
     setLivePaymentStatus(confirmation.payment_status);
     async function poll() {
       try {
