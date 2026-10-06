@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js';
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { supabase } from '@/lib/supabase';
 
@@ -46,18 +46,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [membership, setMembership] = useState<Membership | null>(null);
   const [memberships, setMemberships] = useState<MembershipSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const membershipRef = useRef<Membership | null>(null);
+  const lastUserId = useRef<string | null>(null);
+
+  // Never clear the active restaurant because of a transient failure (network
+  // blip, token refresh race, a slow query). Clearing it makes the staff
+  // layout think the user has no restaurant and redirect to onboarding,
+  // which wipes the whole navigation stack. Only a successful answer that
+  // says "no restaurant" clears it, and an unchanged result is not
+  // re-committed so screens don't reload for nothing.
+  function commitMembership(next: Membership | null) {
+    const prev = membershipRef.current;
+    const same =
+      prev === next ||
+      (!!prev &&
+        !!next &&
+        prev.id === next.id &&
+        prev.tenantId === next.tenantId &&
+        prev.tenantName === next.tenantName &&
+        prev.roleName === next.roleName &&
+        prev.roleId === next.roleId &&
+        prev.permissions.size === next.permissions.size &&
+        [...next.permissions].every((perm) => prev.permissions.has(perm)));
+    if (same) return;
+    membershipRef.current = next;
+    setMembership(next);
+  }
 
   async function loadCurrentMembership(): Promise<Membership | null> {
-    const { data: userData } = await supabase.auth.getUser();
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError && !userData.user) return membershipRef.current;
     const userId = userData.user?.id;
     if (!userId) {
-      setMembership(null);
+      commitMembership(null);
       return null;
     }
 
-    const { data: activeTenant } = await supabase.from('users').select('active_tenant_id').eq('id', userId).maybeSingle();
+    const { data: activeTenant, error: activeError } = await supabase.from('users').select('active_tenant_id').eq('id', userId).maybeSingle();
+    if (activeError) return membershipRef.current;
     if (!activeTenant?.active_tenant_id) {
-      setMembership(null);
+      commitMembership(null);
       return null;
     }
 
@@ -69,14 +97,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .eq('status', 'active')
       .maybeSingle();
 
-    if (error || !data) {
-      setMembership(null);
+    if (error) return membershipRef.current;
+    if (!data) {
+      commitMembership(null);
       return null;
     }
 
     const tenant = Array.isArray(data.tenants) ? data.tenants[0] : data.tenants;
     const role = Array.isArray(data.roles) ? data.roles[0] : data.roles;
-    const { data: perms } = await supabase.rpc('my_permissions');
+    const { data: perms, error: permsError } = await supabase.rpc('my_permissions');
+    if (permsError) return membershipRef.current;
 
     const result: Membership = {
       id: data.id,
@@ -87,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       roleId: data.role_id,
       permissions: new Set((perms ?? []).map((p: { my_permissions: string } | string) => (typeof p === 'string' ? p : p.my_permissions))),
     };
-    setMembership(result);
+    commitMembership(result);
     return result;
   }
 
@@ -95,7 +125,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // (or none yet picked but only one exists), and otherwise leaves
   // `membership` null so the app routes to the restaurant switcher.
   async function refreshMembership(): Promise<Membership | null> {
-    const { data: rows } = await supabase.rpc('my_memberships');
+    const { data: rows, error: rowsError } = await supabase.rpc('my_memberships');
+    if (rowsError) return membershipRef.current;
     const list: MembershipSummary[] = (rows ?? []).map((r: any) => ({
       membershipId: r.membership_id,
       tenantId: r.tenant_id,
@@ -103,22 +134,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       tenantSlug: r.tenant_slug,
       roleName: r.role_name,
     }));
-    setMemberships(list);
+    setMemberships((prev) => (JSON.stringify(prev) === JSON.stringify(list) ? prev : list));
 
     if (list.length === 0) {
-      setMembership(null);
+      commitMembership(null);
       return null;
     }
 
     const { data: userData } = await supabase.auth.getUser();
-    const { data: activeTenant } = await supabase.from('users').select('active_tenant_id').eq('id', userData.user?.id).maybeSingle();
+    const { data: activeTenant, error: activeError } = await supabase.from('users').select('active_tenant_id').eq('id', userData.user?.id).maybeSingle();
+    if (activeError) return membershipRef.current;
     const hasValidSelection = list.some((m) => m.tenantId === activeTenant?.active_tenant_id);
 
     if (!hasValidSelection) {
       if (list.length === 1) {
         await supabase.rpc('set_active_tenant', { p_tenant_id: list[0].tenantId });
       } else {
-        setMembership(null);
+        commitMembership(null);
         return null;
       }
     }
@@ -135,16 +167,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
       setSession(data.session);
+      lastUserId.current = data.session?.user.id ?? null;
       if (data.session) await refreshMembership();
       setLoading(false);
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
-      setSession(newSession);
+    const { data: sub } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      setSession((prev) => (prev?.access_token === newSession?.access_token ? prev : newSession));
       if (newSession) {
+        // Token refreshes and tab-refocus re-emits carry the same user; the
+        // restaurant selection can't have changed, so don't re-resolve it.
+        if (event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') return;
+        if (event === 'SIGNED_IN' && lastUserId.current === newSession.user.id && membershipRef.current) return;
+        lastUserId.current = newSession.user.id;
         await refreshMembership();
       } else {
-        setMembership(null);
+        lastUserId.current = null;
+        commitMembership(null);
         setMemberships([]);
       }
     });

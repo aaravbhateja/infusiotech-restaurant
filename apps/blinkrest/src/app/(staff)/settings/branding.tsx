@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { Alert, BackHandler, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ColorPickerBox } from '@/components/ColorPickerBox';
@@ -22,6 +22,14 @@ function BrandingScreen() {
   const [hex, setHex] = useState('');
   const [saved, setSaved] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Only the on-screen back button leaves this page: swallow the Android
+  // system back gesture/button so an accidental swipe can't drop unsaved
+  // colour changes (iOS swipe-back is disabled in the stack layout).
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => true);
+    return () => sub.remove();
+  }, []);
 
   const load = useCallback(async () => {
     if (!membership) return;
@@ -65,7 +73,7 @@ function BrandingScreen() {
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.bg }}>
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 24 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <Pressable onPress={() => router.back()} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' }}>
+          <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/(staff)/settings' as never))} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' }}>
             <Icon name="left" size={22} stroke={2.2} color={colors.ink900} />
           </Pressable>
           <Text style={{ fontSize: 22, fontFamily: fonts.display, color: colors.ink900 }}>Menu branding</Text>
