@@ -15,6 +15,20 @@ Notifications.setNotificationHandler({
   }),
 });
 
+let registeredToken: string | null = null;
+
+// Stops this phone receiving the signed-in account's pushes. Call before
+// signing out, while the session still exists to authorise the delete.
+export async function unregisterPushToken() {
+  if (!registeredToken) return;
+  try {
+    await supabase.rpc('unregister_push_token', { p_expo_push_token: registeredToken });
+    registeredToken = null;
+  } catch {
+    // best effort — sign-out must never be blocked by this
+  }
+}
+
 // Registers this device for push on the currently active restaurant.
 // Silently no-ops on web (a different delivery mechanism entirely) and on
 // Expo Go on Android (Expo dropped remote push there from SDK 53 — this
@@ -48,6 +62,7 @@ export function usePushNotifications(enabled: boolean) {
         const { data: expoPushToken } = await Notifications.getExpoPushTokenAsync({ projectId });
         if (cancelled || !expoPushToken) return;
 
+        registeredToken = expoPushToken;
         await supabase.rpc('register_push_token', { p_expo_push_token: expoPushToken, p_platform: Platform.OS });
       } catch {
         // Best-effort — a guest device, a simulator, or a missing EAS

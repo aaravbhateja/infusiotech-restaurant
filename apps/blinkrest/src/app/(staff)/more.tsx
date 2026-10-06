@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomNav } from '@/components/BottomNav';
 import { Icon, type IconName } from '@/components/Icon';
 import { useAuth } from '@/hooks/useAuth';
+import { unregisterPushToken } from '@/hooks/usePushNotifications';
 import { menuImageUrl } from '@/lib/menuImage';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts } from '@/theme/tokens';
@@ -200,7 +201,10 @@ export default function More() {
               </Pressable>
             ))}
             <Pressable
-              onPress={() => supabase.auth.signOut()}
+              onPress={async () => {
+                await unregisterPushToken();
+                await supabase.auth.signOut();
+              }}
               style={{ minHeight: 60, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}
             >
               <Icon name="logout" size={21} color={colors.error} />

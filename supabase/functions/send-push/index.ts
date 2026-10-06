@@ -30,8 +30,10 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ ok: true, sent: 0 }), { headers: { 'Content-Type': 'application/json' } });
   }
 
-  const messages = tokens.map((t) => ({
-    to: t.expo_push_token,
+  // One message per device even if a token is somehow stored more than once.
+  const unique = [...new Set(tokens.map((t) => t.expo_push_token))];
+  const messages = unique.map((token) => ({
+    to: token,
     title: body.title,
     body: body.body ?? '',
     sound: 'default',

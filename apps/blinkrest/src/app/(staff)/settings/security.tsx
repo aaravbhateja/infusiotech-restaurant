@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '@/components/Icon';
 import { TextField } from '@/components/TextField';
 import { useAuth } from '@/hooks/useAuth';
+import { unregisterPushToken } from '@/hooks/usePushNotifications';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts, radius } from '@/theme/tokens';
 
@@ -40,7 +41,10 @@ export default function Security() {
   function signOutEverywhere() {
     Alert.alert('Sign out of all devices?', 'Every phone and browser signed in to this account will be signed out, including this one.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign out everywhere', style: 'destructive', onPress: () => supabase.auth.signOut({ scope: 'global' }) },
+      { text: 'Sign out everywhere', style: 'destructive', onPress: async () => {
+          await unregisterPushToken();
+          await supabase.auth.signOut({ scope: 'global' });
+        } },
     ]);
   }
 
