@@ -9,20 +9,16 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts, formatMinor, radius } from '@/theme/tokens';
 
-type Plan = { id: string; key: string; name: string; price_minor: number; entitlements: Record<string, unknown> };
-type Sub = { plan_id: string; status: string; period_start: string; period_end: string | null };
+type Period = 'monthly' | 'yearly';
+type Plan = { id: string; key: string; name: string; price_monthly_minor: number | null; price_yearly_minor: number | null; entitlements: Record<string, unknown> };
+type Sub = { plan_id: string; status: string; billing_period: Period; period_start: string; period_end: string | null };
 type Invoice = { id: string; amount_minor: number; currency: string; status: string; issued_at: string; period_start: string; period_end: string | null; plan: { name: string } | null };
 
-const PLAN_FEATURES: Record<string, string[]> = {
-  starter: ['QR menu', 'Direct ordering', 'Basic order dashboard', 'Basic reports'],
-  growth: ['Everything in Starter', 'Mobile app operations', 'Live order updates', 'Table management', 'Customer CRM', 'Sales analytics'],
-  premium: ['Everything in Growth', 'Advanced analytics', 'Granular staff permissions', 'Multi-branch management', 'Priority support'],
-};
-const PLAN_TAG: Record<string, string> = {
-  starter: 'For a single counter getting started',
-  growth: 'Run the whole floor from your phone',
-  premium: 'For multi-branch restaurants',
-};
+const PLAN_FEATURES = ['QR menu & direct ordering', 'Live order updates', 'Mobile app operations', 'Table management', 'Customer CRM', 'Advanced analytics', 'Granular staff permissions', 'Multi-branch management', 'Priority support'];
+
+function priceFor(plan: Plan, period: Period) {
+  return (period === 'monthly' ? plan.price_monthly_minor : plan.price_yearly_minor) ?? 0;
+}
 
 function SubscriptionScreen() {
   const { membership } = useAuth();
@@ -30,12 +26,13 @@ function SubscriptionScreen() {
   const [sub, setSub] = useState<Sub | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [switching, setSwitching] = useState<string | null>(null);
+  const [period, setPeriod] = useState<Period>('yearly');
 
   const load = useCallback(async () => {
     if (!membership) return;
     const [{ data: planRows }, { data: subRow }, { data: invoiceRows }] = await Promise.all([
-      supabase.from('plans').select('id, key, name, price_minor, entitlements').eq('is_active', true).order('price_minor'),
-      supabase.from('subscriptions').select('plan_id, status, period_start, period_end').eq('tenant_id', membership.tenantId).maybeSingle(),
+      supabase.from('plans').select('id, key, name, price_monthly_minor, price_yearly_minor, entitlements').eq('is_active', true).order('price_yearly_minor'),
+      supabase.from('subscriptions').select('plan_id, status, billing_period, period_start, period_end').eq('tenant_id', membership.tenantId).maybeSingle(),
       supabase.from('invoices').select('id, amount_minor, currency, status, issued_at, period_start, period_end, plan:plans(name)').eq('tenant_id', membership.tenantId).order('issued_at', { ascending: false }),
     ]);
     setPlans(planRows ?? []);
@@ -51,15 +48,15 @@ function SubscriptionScreen() {
   const canManage = membership?.permissions.has('subscription.manage') ?? false;
   const currentPlan = plans.find((p) => p.id === sub?.plan_id);
 
-  async function switchTo(plan: Plan) {
+  async function switchTo(plan: Plan, billing: Period) {
     if (!membership) return;
-    Alert.alert(`Switch to ${plan.name}?`, 'This updates your plan immediately.', [
+    Alert.alert(`Choose ${billing} billing?`, `${formatMinor(priceFor(plan, billing))} per ${billing === 'monthly' ? 'month' : 'year'}. This updates your plan immediately.`, [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Switch',
+        text: 'Confirm',
         onPress: async () => {
           setSwitching(plan.key);
-          const { error } = await supabase.rpc('switch_subscription_plan', { p_tenant_id: membership.tenantId, p_plan_key: plan.key });
+          const { error } = await supabase.rpc('switch_subscription_plan', { p_tenant_id: membership.tenantId, p_plan_key: plan.key, p_billing_period: billing });
           setSwitching(null);
           if (error) Alert.alert('Could not switch plan', error.message);
           else load();
@@ -86,7 +83,7 @@ function SubscriptionScreen() {
             <Text style={{ fontSize: 12, fontFamily: fonts.bodyExtraBold, color: colors.saffron400, letterSpacing: 1 }}>CURRENT PLAN</Text>
             <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
               <Text style={{ fontSize: 34, fontFamily: fonts.display, color: '#FFFFFF' }}>{currentPlan.name}</Text>
-              <Text style={{ fontSize: 15, color: '#E9E1DC' }}>{formatMinor(currentPlan.price_minor)} / year</Text>
+              <Text style={{ fontSize: 15, color: '#E9E1DC' }}>{formatMinor(priceFor(currentPlan, sub?.billing_period ?? 'yearly'))} / {sub?.billing_period === 'monthly' ? 'month' : 'year'}</Text>
             </View>
             {sub?.period_end ? (
               <View style={{ gap: 6 }}>
@@ -101,10 +98,21 @@ function SubscriptionScreen() {
           </View>
         ) : null}
 
-        <Text style={{ fontSize: 20, fontFamily: fonts.display, color: colors.ink900, marginHorizontal: 4 }}>Compare plans</Text>
+        <Text style={{ fontSize: 20, fontFamily: fonts.display, color: colors.ink900, marginHorizontal: 4 }}>Choose billing</Text>
+        <View style={{ flexDirection: 'row', backgroundColor: '#F7F1EC', borderRadius: radius.pill, padding: 4 }}>
+          {(['monthly', 'yearly'] as const).map((opt) => (
+            <Pressable
+              key={opt}
+              onPress={() => setPeriod(opt)}
+              style={{ flex: 1, height: 42, borderRadius: radius.pill, backgroundColor: period === opt ? colors.ink900 : 'transparent', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={{ fontFamily: fonts.bodyExtraBold, fontSize: 14, color: period === opt ? '#FFFFFF' : colors.ink700 }}>{opt === 'monthly' ? 'Monthly' : 'Yearly'}</Text>
+            </Pressable>
+          ))}
+        </View>
         {plans.map((p) => {
-          const isCur = p.id === sub?.plan_id;
-          const up = p.key === 'premium';
+          const isCur = p.id === sub?.plan_id && sub?.status === 'active' && sub?.billing_period === period;
+          const yearlySaving = (p.price_monthly_minor ?? 0) * 12 - (p.price_yearly_minor ?? 0);
           return (
             <View key={p.id} style={{ backgroundColor: colors.surface, borderRadius: 24, borderWidth: isCur ? 2 : 1, borderColor: isCur ? colors.ink900 : '#F4ECE6', padding: 18, gap: 12 }}>
               {isCur ? (
@@ -114,11 +122,13 @@ function SubscriptionScreen() {
               ) : null}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <Text style={{ fontSize: 22, fontFamily: fonts.display, color: colors.ink900 }}>{p.name}</Text>
-                <Text style={{ fontSize: 24, fontFamily: fonts.display, color: colors.ink900 }}>{formatMinor(p.price_minor)}<Text style={{ fontSize: 13, fontFamily: fonts.body, color: colors.ink500 }}>/year</Text></Text>
+                <Text style={{ fontSize: 24, fontFamily: fonts.display, color: colors.ink900 }}>{formatMinor(priceFor(p, period))}<Text style={{ fontSize: 13, fontFamily: fonts.body, color: colors.ink500 }}>/{period === 'monthly' ? 'month' : 'year'}</Text></Text>
               </View>
-              <Text style={{ fontSize: 13, color: colors.ink700, marginTop: -6 }}>{PLAN_TAG[p.key] ?? ''}</Text>
+              {period === 'yearly' && yearlySaving > 0 ? (
+                <Text style={{ fontSize: 13, fontFamily: fonts.bodyExtraBold, color: colors.success, marginTop: -6 }}>Save {formatMinor(yearlySaving)} a year vs monthly</Text>
+              ) : null}
               <View style={{ gap: 8 }}>
-                {(PLAN_FEATURES[p.key] ?? []).map((f) => (
+                {PLAN_FEATURES.map((f) => (
                   <View key={f} style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
                     <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: colors.successBg, alignItems: 'center', justifyContent: 'center' }}>
                       <Icon name="check" size={13} stroke={3} color={colors.success} />
@@ -130,11 +140,11 @@ function SubscriptionScreen() {
               {canManage ? (
                 <Pressable
                   disabled={isCur || switching === p.key}
-                  onPress={() => switchTo(p)}
-                  style={{ height: 50, borderRadius: radius.pill, backgroundColor: isCur ? '#F7F1EC' : up ? colors.coral600 : '#FFFFFF', borderWidth: isCur || up ? 0 : 1.5, borderColor: '#E4D8D0', alignItems: 'center', justifyContent: 'center' }}
+                  onPress={() => switchTo(p, period)}
+                  style={{ height: 50, borderRadius: radius.pill, backgroundColor: isCur ? '#F7F1EC' : colors.coral600, alignItems: 'center', justifyContent: 'center' }}
                 >
-                  <Text style={{ fontFamily: fonts.bodyExtraBold, fontSize: 15, color: isCur ? colors.ink700 : up ? '#FFFFFF' : colors.ink900 }}>
-                    {isCur ? 'Your current plan' : switching === p.key ? 'Switching…' : up ? 'Upgrade' : 'Switch to this plan'}
+                  <Text style={{ fontFamily: fonts.bodyExtraBold, fontSize: 15, color: isCur ? colors.ink700 : '#FFFFFF' }}>
+                    {isCur ? 'Your current plan' : switching === p.key ? 'Updating…' : sub?.status === 'active' ? `Switch to ${period}` : `Subscribe ${period}`}
                   </Text>
                 </Pressable>
               ) : null}
@@ -167,7 +177,7 @@ function SubscriptionScreen() {
         ) : null}
 
         <Text style={{ fontSize: 12, color: colors.ink500, marginHorizontal: 4 }}>
-          Prices exclude 18% GST. Switching here changes your plan immediately; online billing isn&rsquo;t connected yet.
+          Prices exclude 18% GST. Changing billing here takes effect immediately; online billing isn&rsquo;t connected yet.
         </Text>
       </ScrollView>
     </SafeAreaView>

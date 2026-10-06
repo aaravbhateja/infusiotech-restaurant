@@ -76,12 +76,10 @@ select '00000000-0000-0000-0000-000000000005', id from public.permissions
 where key in ('orders.view', 'orders.status.update')
 on conflict do nothing;
 
--- Subscription plans (indicative pricing from the PRD; confirm before launch).
-insert into public.plans (key, name, price_minor, currency, entitlements) values
-  ('starter', 'Starter', 299900, 'INR',
-    '{"mobile_app": false, "tables_crm": false, "analytics": "none"}'::jsonb),
-  ('growth', 'Growth', 599900, 'INR',
-    '{"mobile_app": true, "tables_crm": true, "analytics": "basic"}'::jsonb),
-  ('premium', 'Premium', 999900, 'INR',
+-- Single subscription plan, ₹999/month or ₹9,999/year (excl. GST). The key
+-- stays 'starter' because onboarding hardcodes it for the trial subscription;
+-- price_minor mirrors the yearly price.
+insert into public.plans (key, name, price_minor, price_monthly_minor, price_yearly_minor, currency, entitlements) values
+  ('starter', 'BlinkRest', 999900, 99900, 999900, 'INR',
     '{"mobile_app": true, "tables_crm": true, "analytics": "advanced", "multi_branch": true}'::jsonb)
 on conflict (key) do nothing;
