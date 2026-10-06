@@ -1,5 +1,5 @@
 import { Redirect, router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, RefreshControl, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Rect } from 'react-native-svg';
@@ -28,112 +28,120 @@ function initials(name: string) {
     .join('') || 'BR';
 }
 
+type RecentOrder = { created_at: string; total_minor: number; order_status: string; customer_id: string | null; items: { item_name_snapshot: string; quantity: number; line_total_minor: number }[] };
+
+type Snap = {
+  logoPath: string | null;
+  firstName: string | null;
+  revenue: number;
+  orderCount: number;
+  avgOrder: number;
+  lastWeekRevenue: number;
+  lastWeekCount: number;
+  recent: RecentOrder[];
+  tables: { id: string; floor_state: string }[];
+  occupiedIds: string[];
+  pay: { method: string; amount: number }[];
+  pendingMinor: number;
+  pendingCount: number;
+  customers: { id: string; name: string | null }[];
+  unreadCount: number;
+  activeOrders: ActiveOrder[];
+  latestActive: { order_number: string; total_minor: number; table: string | null } | null;
+};
+
+const EMPTY_SNAP: Snap = {
+  logoPath: null, firstName: null, revenue: 0, orderCount: 0, avgOrder: 0, lastWeekRevenue: 0, lastWeekCount: 0, recent: [],
+  tables: [], occupiedIds: [], pay: [], pendingMinor: 0, pendingCount: 0, customers: [], unreadCount: 0, activeOrders: [], latestActive: null,
+};
+
+// Remembered across visits: switching tabs unmounts this screen, so without
+// this every return showed a skeleton until every query finished again. The
+// last snapshot renders instantly and is refreshed in the background.
+let homeCache: { tenantId: string; snap: Snap } | null = null;
+
 export default function Home() {
-  const { membership } = useAuth();
-  const [revenue, setRevenue] = useState(0);
-  const [orderCount, setOrderCount] = useState(0);
-  const [avgOrder, setAvgOrder] = useState(0);
-  const [activeOrders, setActiveOrders] = useState<ActiveOrder[]>([]);
-  const [latestActive, setLatestActive] = useState<{ order_number: string; total_minor: number; table: string | null } | null>(
-    null,
-  );
+  const { membership, session } = useAuth();
+  const cached = homeCache && homeCache.tenantId === membership?.tenantId ? homeCache.snap : null;
+  const [snap, setSnap] = useState<Snap>(cached ?? EMPTY_SNAP);
   const [refreshing, setRefreshing] = useState(false);
-  const [logoPath, setLogoPath] = useState<string | null>(null);
   const { width } = useWindowDimensions();
-  const [loadingFirst, setLoadingFirst] = useState(true);
+  const [loadingFirst, setLoadingFirst] = useState(!cached);
   const [failed, setFailed] = useState(false);
-  const [firstName, setFirstName] = useState<string | null>(null);
-  const [lastWeekRevenue, setLastWeekRevenue] = useState(0);
-  const [lastWeekCount, setLastWeekCount] = useState(0);
   const [chartRange, setChartRange] = useState<'Today' | 'Week' | 'Month'>('Week');
-  const [recent, setRecent] = useState<{ created_at: string; total_minor: number; order_status: string; customer_id: string | null; items: { item_name_snapshot: string; quantity: number; line_total_minor: number }[] }[]>([]);
-  const [tables, setTables] = useState<{ id: string; floor_state: string }[]>([]);
-  const [occupiedIds, setOccupiedIds] = useState<Set<string>>(new Set());
-  const [pay, setPay] = useState<{ method: string; amount: number }[]>([]);
-  const [pendingMinor, setPendingMinor] = useState(0);
-  const [pendingCount, setPendingCount] = useState(0);
-  const [customers, setCustomers] = useState<{ id: string; name: string | null }[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const { logoPath, firstName, revenue, orderCount, avgOrder, lastWeekRevenue, lastWeekCount, recent, tables, pay, pendingMinor, pendingCount, customers, unreadCount, activeOrders, latestActive } = snap;
+  const occupiedIds = useMemo(() => new Set(snap.occupiedIds), [snap.occupiedIds]);
+  const userId = session?.user.id;
 
   const load = useCallback(async () => {
-    if (membership) {
-      const { data: tenant } = await supabase.from('tenants').select('logo_path').eq('id', membership.tenantId).maybeSingle();
-      setLogoPath(tenant?.logo_path ?? null);
-      const { data: u } = await supabase.from('users').select('display_name').eq('id', (await supabase.auth.getUser()).data.user?.id ?? '').maybeSingle();
-      setFirstName(u?.display_name?.split(' ')[0] ?? null);
-    }
-
+    if (!membership) return;
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
-
     const monthAgo = new Date(startOfDay.getTime() - 29 * 86400000);
     const weekAgoStart = new Date(startOfDay.getTime() - 7 * 86400000);
-    const { data: window, error: windowError } = await supabase
-      .from('orders')
-      .select('total_minor, created_at, order_status, customer_id, items:order_items(item_name_snapshot, quantity, line_total_minor)')
-      .gte('created_at', monthAgo.toISOString())
-      .not('order_status', 'in', '(rejected,cancelled)');
-    if (windowError) {
-      setFailed(true);
-      setLoadingFirst(false);
-      return;
-    }
-    setFailed(false);
-    const all = (window ?? []) as unknown as typeof recent;
-    setRecent(all);
 
-    const todayOrders = all.filter((o) => new Date(o.created_at) >= startOfDay);
-    const total = todayOrders.reduce((sum, o) => sum + o.total_minor, 0);
-    setRevenue(total);
-    setOrderCount(todayOrders.length);
-    setAvgOrder(todayOrders.length ? Math.round(total / todayOrders.length) : 0);
-
-    const sameDayLastWeek = all.filter((o) => {
-      const t = new Date(o.created_at).getTime();
-      return t >= weekAgoStart.getTime() && t < weekAgoStart.getTime() + 86400000;
-    });
-    setLastWeekRevenue(sameDayLastWeek.reduce((s, o) => s + o.total_minor, 0));
-    setLastWeekCount(sameDayLastWeek.length);
-
-    const [{ data: tbl }, { data: openOrders }, { data: pays }, { data: unpaid }, { data: cust }] = await Promise.all([
+    // Every query at once instead of one after another.
+    const [tenantRes, userRes, windowRes, tblRes, openRes, paysRes, unpaidRes, custRes, notesRes, readsRes, activeRes] = await Promise.all([
+      supabase.from('tenants').select('logo_path').eq('id', membership.tenantId).maybeSingle(),
+      supabase.from('users').select('display_name').eq('id', userId ?? '').maybeSingle(),
+      supabase
+        .from('orders')
+        .select('total_minor, created_at, order_status, customer_id, items:order_items(item_name_snapshot, quantity, line_total_minor)')
+        .gte('created_at', monthAgo.toISOString())
+        .not('order_status', 'in', '(rejected,cancelled)'),
       supabase.from('restaurant_tables').select('id, floor_state').eq('status', 'active').order('label'),
       supabase.from('orders').select('table_id').in('order_status', ['new', 'accepted', 'preparing', 'ready', 'served']).eq('payment_status', 'unpaid').not('table_id', 'is', null),
       supabase.from('payments').select('amount_minor, method').in('status', ['paid', 'cash_received', 'reconciled']).gte('created_at', startOfDay.toISOString()),
       supabase.from('orders').select('total_minor').eq('payment_status', 'unpaid').not('order_status', 'in', '(rejected,cancelled)'),
       supabase.from('customers').select('id, name').order('created_at', { ascending: false }).limit(4),
+      supabase.from('notifications').select('id').order('created_at', { ascending: false }).limit(100),
+      supabase.from('notification_reads').select('notification_id').eq('membership_id', membership.id),
+      supabase.from('orders').select('order_status, order_number, total_minor, table:restaurant_tables(label)').in('order_status', ACTIVE_STATUSES).order('created_at', { ascending: false }),
     ]);
-    setTables((tbl ?? []) as { id: string; floor_state: string }[]);
-    setOccupiedIds(new Set((openOrders ?? []).map((o) => o.table_id as string)));
-    const byMethod = new Map<string, number>();
-    for (const p of pays ?? []) byMethod.set(p.method ?? 'other', (byMethod.get(p.method ?? 'other') ?? 0) + p.amount_minor);
-    setPay([...byMethod.entries()].map(([method, amount]) => ({ method, amount })).sort((a, b) => b.amount - a.amount));
-    setPendingMinor((unpaid ?? []).reduce((s, o) => s + o.total_minor, 0));
-    setPendingCount(unpaid?.length ?? 0);
-    setCustomers((cust ?? []) as { id: string; name: string | null }[]);
-    if (membership) {
-      const [{ data: notes }, { data: reads }] = await Promise.all([
-        supabase.from('notifications').select('id').order('created_at', { ascending: false }).limit(100),
-        supabase.from('notification_reads').select('notification_id').eq('membership_id', membership.id),
-      ]);
-      const readIds = new Set((reads ?? []).map((r) => r.notification_id));
-      setUnreadCount((notes ?? []).filter((n) => !readIds.has(n.id)).length);
+
+    if (windowRes.error) {
+      if (!homeCache) setFailed(true);
+      setLoadingFirst(false);
+      return;
     }
+    setFailed(false);
+
+    const all = (windowRes.data ?? []) as unknown as RecentOrder[];
+    const todayOrders = all.filter((o) => new Date(o.created_at) >= startOfDay);
+    const total = todayOrders.reduce((sum, o) => sum + o.total_minor, 0);
+    const sameDayLastWeek = all.filter((o) => {
+      const t = new Date(o.created_at).getTime();
+      return t >= weekAgoStart.getTime() && t < weekAgoStart.getTime() + 86400000;
+    });
+    const byMethod = new Map<string, number>();
+    for (const row of paysRes.data ?? []) byMethod.set(row.method ?? 'other', (byMethod.get(row.method ?? 'other') ?? 0) + row.amount_minor);
+    const readIds = new Set((readsRes.data ?? []).map((r) => r.notification_id));
+    const active = (activeRes.data ?? []) as unknown as (ActiveOrder & { order_number: string; total_minor: number; table: { label: string } | null })[];
+    const first = active[0];
+
+    const next: Snap = {
+      logoPath: tenantRes.data?.logo_path ?? null,
+      firstName: userRes.data?.display_name?.split(' ')[0] ?? null,
+      revenue: total,
+      orderCount: todayOrders.length,
+      avgOrder: todayOrders.length ? Math.round(total / todayOrders.length) : 0,
+      lastWeekRevenue: sameDayLastWeek.reduce((s, o) => s + o.total_minor, 0),
+      lastWeekCount: sameDayLastWeek.length,
+      recent: all,
+      tables: (tblRes.data ?? []) as { id: string; floor_state: string }[],
+      occupiedIds: (openRes.data ?? []).map((o) => o.table_id as string),
+      pay: [...byMethod.entries()].map(([method, amount]) => ({ method, amount })).sort((a, b) => b.amount - a.amount),
+      pendingMinor: (unpaidRes.data ?? []).reduce((s, o) => s + o.total_minor, 0),
+      pendingCount: unpaidRes.data?.length ?? 0,
+      customers: (custRes.data ?? []) as { id: string; name: string | null }[],
+      unreadCount: (notesRes.data ?? []).filter((n) => !readIds.has(n.id)).length,
+      activeOrders: active.map((o) => ({ order_status: o.order_status })),
+      latestActive: first ? { order_number: first.order_number, total_minor: first.total_minor, table: first.table?.label ?? null } : null,
+    };
+    homeCache = { tenantId: membership.tenantId, snap: next };
+    setSnap(next);
     setLoadingFirst(false);
-
-    const { data: active } = await supabase
-      .from('orders')
-      .select('order_status, order_number, total_minor, table:restaurant_tables(label)')
-      .in('order_status', ACTIVE_STATUSES)
-      .order('created_at', { ascending: false });
-
-    setActiveOrders((active as unknown as ActiveOrder[]) ?? []);
-    const first = (active as any)?.[0];
-    setLatestActive(
-      first
-        ? { order_number: first.order_number, total_minor: first.total_minor, table: first.table?.label ?? null }
-        : null,
-    );
-  }, [membership]);
+  }, [membership, userId]);
 
   useRealtimeRefresh('hometsx', tenantSubs(membership?.tenantId, ['orders', 'payments', 'restaurant_tables', 'customers', 'notifications']), load);
 

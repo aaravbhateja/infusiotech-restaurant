@@ -14,22 +14,22 @@ export default function StaffLayout() {
 
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
-      <Stack.Screen name="home" />
-      <Stack.Screen name="orders" />
-      <Stack.Screen name="menu/index" />
+      <Stack.Screen name="home" options={{ animation: 'none' }} />
+      <Stack.Screen name="orders" options={{ animation: 'none' }} />
+      <Stack.Screen name="menu/index" options={{ animation: 'none' }} />
       <Stack.Screen name="menu/[id]" />
       <Stack.Screen name="menu/new" />
-      <Stack.Screen name="tables" />
-      <Stack.Screen name="more" />
+      <Stack.Screen name="tables" options={{ animation: 'none' }} />
+      <Stack.Screen name="more" options={{ animation: 'none' }} />
       <Stack.Screen name="orders/[id]" />
       <Stack.Screen name="orders/new" />
       <Stack.Screen name="staff/index" />
       <Stack.Screen name="staff/invite" />
       <Stack.Screen name="analytics" />
-      <Stack.Screen name="waiter-home" />
-      <Stack.Screen name="kitchen-home" />
-      <Stack.Screen name="cashier-home" />
-      <Stack.Screen name="manager-home" />
+      <Stack.Screen name="waiter-home" options={{ animation: 'none' }} />
+      <Stack.Screen name="kitchen-home" options={{ animation: 'none' }} />
+      <Stack.Screen name="cashier-home" options={{ animation: 'none' }} />
+      <Stack.Screen name="manager-home" options={{ animation: 'none' }} />
       <Stack.Screen name="customers/index" />
       <Stack.Screen name="customers/[id]" />
       <Stack.Screen name="preview/menu" />
