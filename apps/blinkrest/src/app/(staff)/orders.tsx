@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -42,7 +42,7 @@ const NEXT_STEP: Record<string, { status: string; label: string; icon: IconName;
   ready: { status: 'served', label: 'Mark served', icon: 'dine', bg: '#F1EBFF', fg: '#5B21B6', permission: 'orders.serve' },
 };
 
-const FILTERS = ['all', 'new', 'accepted', 'preparing', 'ready', 'served', 'rejected', 'cancelled'] as const;
+const FILTERS = ['all', 'unpaid', 'new', 'accepted', 'preparing', 'ready', 'served', 'rejected', 'cancelled'] as const;
 
 const PAYMENT_LABELS: Record<string, string> = {
   paid: 'Paid online',
@@ -62,7 +62,8 @@ function timeAgo(iso: string) {
 function OrdersScreen() {
   const { membership } = useAuth();
   const [orders, setOrders] = useState<OrderRow[]>([]);
-  const [filter, setFilter] = useState<(typeof FILTERS)[number]>('all');
+  const { filter: filterParam } = useLocalSearchParams<{ filter?: string }>();
+  const [filter, setFilter] = useState<(typeof FILTERS)[number]>(FILTERS.find((f) => f === filterParam) ?? 'all');
   const [confirmingReject, setConfirmingReject] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -114,12 +115,14 @@ function OrdersScreen() {
     const c: Record<string, number> = { all: 0 };
     for (const o of orders) {
       c[o.order_status] = (c[o.order_status] ?? 0) + 1;
+      if (o.payment_status === 'unpaid' && !['rejected', 'cancelled'].includes(o.order_status)) c.unpaid = (c.unpaid ?? 0) + 1;
       if (['new', 'accepted', 'preparing', 'ready', 'served'].includes(o.order_status)) c.all += 1;
     }
     return c;
   }, [orders]);
 
   const visible = useMemo(() => {
+    if (filter === 'unpaid') return orders.filter((o) => o.payment_status === 'unpaid' && !['rejected', 'cancelled'].includes(o.order_status));
     if (filter === 'all') return orders.filter((o) => ['new', 'accepted', 'preparing', 'ready', 'served'].includes(o.order_status));
     return orders.filter((o) => o.order_status === filter);
   }, [orders, filter]);

@@ -150,10 +150,10 @@ export default function Home() {
   const countDelta = pct(orderCount, lastWeekCount);
 
   const metrics = [
-    { label: "Today's revenue", value: formatMinor(revenue), icon: 'rupee' as const, tint: colors.coral50, ink: colors.coral600, delta: revDelta, sub: lastWeekRevenue ? `vs ${formatMinor(lastWeekRevenue)} last week` : 'No data last week' },
-    { label: 'Total orders', value: String(orderCount), icon: 'orders' as const, tint: '#EAF1FF', ink: '#1F5BD6', delta: countDelta, sub: lastWeekCount ? `${orderCount - lastWeekCount >= 0 ? '+' : ''}${orderCount - lastWeekCount} vs last week` : 'No data last week' },
-    { label: 'Pending bills', value: String(pendingCount), icon: 'timer' as const, tint: colors.saffron50, ink: '#8A5A00', delta: null, sub: `${formatMinor(pendingMinor)} to collect` },
-    { label: 'Avg order value', value: formatMinor(avgOrder), icon: 'receipt' as const, tint: '#F1EBFF', ink: '#5B21B6', delta: null, sub: `${activeOrders.length} active now` },
+    { label: "Today's revenue", value: formatMinor(revenue), icon: 'rupee' as const, tint: colors.coral50, ink: colors.coral600, go: () => router.push('/(staff)/analytics'), delta: revDelta, sub: lastWeekRevenue ? `vs ${formatMinor(lastWeekRevenue)} last week` : 'No data last week' },
+    { label: 'Total orders', value: String(orderCount), icon: 'orders' as const, tint: '#EAF1FF', ink: '#1F5BD6', go: () => router.push('/(staff)/orders'), delta: countDelta, sub: lastWeekCount ? `${orderCount - lastWeekCount >= 0 ? '+' : ''}${orderCount - lastWeekCount} vs last week` : 'No data last week' },
+    { label: 'Pending bills', value: String(pendingCount), icon: 'timer' as const, tint: colors.saffron50, ink: '#8A5A00', go: () => router.push('/(staff)/orders?filter=unpaid' as never), delta: null, sub: `${formatMinor(pendingMinor)} to collect` },
+    { label: 'Avg order value', value: formatMinor(avgOrder), icon: 'receipt' as const, tint: '#F1EBFF', ink: '#5B21B6', go: () => router.push('/(staff)/analytics'), delta: null, sub: `${activeOrders.length} active now` },
   ];
 
   const actions = [
@@ -369,8 +369,9 @@ export default function Home() {
         {/* Metrics grid */}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
           {metrics.map((m) => (
-            <View
+            <Pressable
               key={m.label}
+              onPress={m.go}
               style={{
                 width: '47%',
                 backgroundColor: colors.surface,
@@ -397,7 +398,7 @@ export default function Home() {
                 <Text style={{ fontSize: 13, fontFamily: fonts.bodyBold, color: colors.ink900, marginTop: 2 }}>{m.label}</Text>
                 <Text style={{ fontSize: 11, color: colors.ink500, marginTop: 1 }}>{m.sub}</Text>
               </View>
-            </View>
+            </Pressable>
           ))}
         </View>
 
