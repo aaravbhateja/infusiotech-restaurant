@@ -6,7 +6,7 @@ import { colors } from '@/theme/tokens';
 
 export default function StaffLayout() {
   const { session, membership, loading } = useAuth();
-  usePushNotifications(!!membership);
+  usePushNotifications(!!membership, membership?.tenantId);
 
   if (loading) return null;
   if (!session) return <Redirect href="/login" />;

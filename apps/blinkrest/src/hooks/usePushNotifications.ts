@@ -34,7 +34,7 @@ export async function unregisterPushToken() {
 // Expo Go on Android (Expo dropped remote push there from SDK 53 — this
 // needs a development/production build to actually receive anything,
 // though the registration call itself is harmless either way).
-export function usePushNotifications(enabled: boolean) {
+export function usePushNotifications(enabled: boolean, tenantId?: string) {
   useEffect(() => {
     if (!enabled || Platform.OS === 'web' || !Device.isDevice) return;
     let cancelled = false;
@@ -74,5 +74,7 @@ export function usePushNotifications(enabled: boolean) {
     return () => {
       cancelled = true;
     };
-  }, [enabled]);
+    // Re-register when the active restaurant changes: a token is bound to one
+    // restaurant at a time, so switching must move it.
+  }, [enabled, tenantId]);
 }
