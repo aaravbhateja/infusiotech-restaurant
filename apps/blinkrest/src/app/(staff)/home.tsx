@@ -511,7 +511,7 @@ export default function Home() {
           <View style={{ backgroundColor: colors.surface, borderRadius: 24, borderWidth: 1, borderColor: '#F4ECE6', padding: 18, gap: 12 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
               <Text style={{ fontSize: 17, fontFamily: fonts.display, color: colors.ink900 }}>Payment breakdown</Text>
-              <Pressable onPress={() => router.push('/(staff)/payments/index')}>
+              <Pressable onPress={() => router.push('/(staff)/payments' as never)}>
                 <Text style={{ fontSize: 12, fontFamily: fonts.bodyExtraBold, color: colors.coral600 }}>Payments</Text>
               </Pressable>
             </View>
@@ -542,13 +542,13 @@ export default function Home() {
           <View style={{ gap: 10 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
               <Text style={{ fontSize: 17, fontFamily: fonts.display, color: colors.ink900 }}>Recent customers</Text>
-              <Pressable onPress={() => router.push('/(staff)/customers/index')}>
+              <Pressable onPress={() => router.push('/(staff)/customers' as never)}>
                 <Text style={{ fontSize: 12, fontFamily: fonts.bodyExtraBold, color: colors.coral600 }}>View all</Text>
               </Pressable>
             </View>
             <View style={{ flexDirection: 'row', gap: 10 }}>
               {customers.map((c, i) => (
-                <Pressable key={c.id} onPress={() => router.push({ pathname: '/(staff)/customers/[id]', params: { id: c.id } })} style={{ flex: 1, backgroundColor: colors.surface, borderRadius: 18, borderWidth: 1, borderColor: '#F4ECE6', padding: 10, alignItems: 'center', gap: 6 }}>
+                <Pressable key={c.id} onPress={() => router.push(`/(staff)/customers/${c.id}` as never)} style={{ flex: 1, backgroundColor: colors.surface, borderRadius: 18, borderWidth: 1, borderColor: '#F4ECE6', padding: 10, alignItems: 'center', gap: 6 }}>
                   <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: ['#FFD3C5', '#D6E4FF', '#FFE9A8', '#CDEFD9'][i % 4], alignItems: 'center', justifyContent: 'center' }}>
                     <Text style={{ fontSize: 13, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>{initials(c.name ?? '?')}</Text>
                   </View>

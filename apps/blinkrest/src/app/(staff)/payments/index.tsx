@@ -33,25 +33,44 @@ const STATUS_STYLE: Record<Status, { label: string; line: 'solid' | 'dashed'; bd
 
 const TABS = ['All', 'UPI', 'Card', 'Cash', 'Pending', 'Refunds'];
 
-function isToday(iso: string) {
-  const d = new Date(iso);
-  const now = new Date();
-  return d.toDateString() === now.toDateString();
+const PERIODS = [
+  { key: 'today', label: 'Today', title: 'today' },
+  { key: 'yesterday', label: 'Yesterday', title: 'yesterday' },
+  { key: '7d', label: '7 days', title: 'in the last 7 days' },
+  { key: '30d', label: '30 days', title: 'in the last 30 days' },
+  { key: 'all', label: 'All time', title: 'all time' },
+] as const;
+type Period = (typeof PERIODS)[number]['key'];
+
+function periodRange(period: Period): { from: Date | null; to: Date | null } {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const DAY = 86400000;
+  if (period === 'today') return { from: start, to: null };
+  if (period === 'yesterday') return { from: new Date(start.getTime() - DAY), to: start };
+  if (period === '7d') return { from: new Date(start.getTime() - 6 * DAY), to: null };
+  if (period === '30d') return { from: new Date(start.getTime() - 29 * DAY), to: null };
+  return { from: null, to: null };
 }
 
 function PaymentsScreen() {
   const { membership } = useAuth();
   const [tab, setTab] = useState('All');
   const [txns, setTxns] = useState<Txn[]>([]);
+  const [period, setPeriod] = useState<Period>('today');
 
   const load = useCallback(async () => {
-    const { data } = await supabase
+    const { from, to } = periodRange(period);
+    let q = supabase
       .from('payments')
       .select('id, provider, method, provider_reference, amount_minor, status, created_at, order:orders(order_number, table:restaurant_tables(label), customer:customers(name, phone))')
       .order('created_at', { ascending: false })
-      .limit(100);
+      .limit(1000);
+    if (from) q = q.gte('created_at', from.toISOString());
+    if (to) q = q.lt('created_at', to.toISOString());
+    const { data } = await q;
     setTxns((data as unknown as Txn[]) ?? []);
-  }, []);
+  }, [period]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
@@ -66,7 +85,8 @@ function PaymentsScreen() {
     };
   }, [membership, load]);
 
-  const todays = useMemo(() => txns.filter((t) => isToday(t.created_at)), [txns]);
+  const todays = txns;
+  const periodTitle = PERIODS.find((p) => p.key === period)!.title;
 
   const totals = useMemo(() => {
     const successful = todays.filter((t) => ['paid', 'cash_received', 'reconciled'].includes(t.status));
@@ -106,14 +126,22 @@ function PaymentsScreen() {
             <Icon name="left" size={22} stroke={2.2} color={colors.ink900} />
           </Pressable>
           <Text style={{ fontSize: 28, fontFamily: fonts.display, color: colors.ink900, flex: 1 }}>Payments</Text>
-          <View style={{ height: 44, paddingHorizontal: 14, borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Icon name="calendar" size={17} color={colors.ink900} />
-            <Text style={{ fontSize: 14, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>Today</Text>
-          </View>
         </View>
 
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+          {PERIODS.map((p) => {
+            const on = p.key === period;
+            return (
+              <Pressable key={p.key} onPress={() => setPeriod(p.key)} style={{ height: 38, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: on ? colors.coral600 : colors.surface, borderWidth: on ? 0 : 1.5, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                {p.key === 'today' ? <Icon name="calendar" size={15} color={on ? '#FFFFFF' : colors.ink900} /> : null}
+                <Text style={{ fontSize: 13, fontFamily: on ? fonts.bodyExtraBold : fonts.bodyBold, color: on ? '#FFFFFF' : colors.ink900 }}>{p.label}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
         <View style={{ backgroundColor: colors.ink900, borderRadius: 26, padding: 18, gap: 6 }}>
-          <Text style={{ fontSize: 13, fontFamily: fonts.bodyBold, color: '#E9E1DC' }}>Total collected today</Text>
+          <Text style={{ fontSize: 13, fontFamily: fonts.bodyBold, color: '#E9E1DC' }}>Total collected {periodTitle}</Text>
           <Text style={{ fontSize: 38, fontFamily: fonts.display, color: '#FFFFFF' }}>{formatMinor(totals.total)}</Text>
           <Text style={{ fontSize: 13, color: '#C9BDB6' }}>{totals.count} payments</Text>
         </View>
@@ -149,7 +177,7 @@ function PaymentsScreen() {
 
         <View style={{ backgroundColor: colors.surface, borderRadius: 22, borderWidth: 1, borderColor: '#F4ECE6', overflow: 'hidden' }}>
           {filtered.length === 0 ? (
-            <Text style={{ padding: 24, textAlign: 'center', fontSize: 14, color: colors.ink500 }}>No transactions in this filter today.</Text>
+            <Text style={{ padding: 24, textAlign: 'center', fontSize: 14, color: colors.ink500 }}>No transactions in this filter {period === 'all' ? 'yet' : periodTitle}.</Text>
           ) : (
             filtered.map((x, i) => {
               const s = STATUS_STYLE[x.status];
