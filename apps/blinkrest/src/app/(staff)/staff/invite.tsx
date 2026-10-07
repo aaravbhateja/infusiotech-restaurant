@@ -61,7 +61,7 @@ function InviteStaffScreen() {
     });
     setSaving(false);
     if (error) {
-      setError(error.message);
+      setError(error.message.includes('already_a_member') ? 'This person is already on your team, so they can’t be invited again.' : error.message);
       return;
     }
     setRawToken((data as any).raw_token);
