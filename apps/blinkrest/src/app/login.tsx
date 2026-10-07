@@ -139,6 +139,12 @@ export default function Login() {
           />
 
           <View style={{ marginTop: 'auto', gap: 14, alignItems: 'center' }}>
+            <Text
+              onPress={() => router.replace({ pathname: '/phone-auth' as never, params: { intent: mode } } as never)}
+              style={{ fontSize: 14, fontFamily: fonts.bodyExtraBold, color: colors.coral600 }}
+            >
+              Use mobile number instead
+            </Text>
             <Text style={{ fontSize: 14, fontFamily: fonts.bodyBold, color: colors.ink700, textAlign: 'center' }}>
               {isSignin
                 ? 'Use the email and password your restaurant is registered with.'

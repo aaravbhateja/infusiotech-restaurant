@@ -80,6 +80,7 @@ function AppGate({ fontsLoaded, splashMinElapsed }: { fontsLoaded: boolean; spla
         <Stack.Screen name="welcome" />
         <Stack.Screen name="select-restaurant" />
         <Stack.Screen name="login" />
+        <Stack.Screen name="phone-auth" />
         <Stack.Screen name="otp" />
         <Stack.Screen name="forgot-password" />
         <Stack.Screen name="reset-password" />
