@@ -30,7 +30,7 @@ const GROUPS: { title: string; rows: Row[] }[] = [
   {
     title: 'OPERATIONS',
     rows: [
-      { label: 'Order settings', sub: 'Auto-accept, SLA, KOT printing', icon: 'orders', bg: '#EAF1FF', fg: '#1F5BD6', route: '/(staff)/settings/orders' },
+      { label: 'Order settings', sub: 'Auto-accept and response time', icon: 'orders', bg: '#EAF1FF', fg: '#1F5BD6', route: '/(staff)/settings/orders' },
       { label: 'Table settings', sub: 'Manage tables and areas', icon: 'tables', bg: '#EAF1FF', fg: '#1F5BD6', route: '/(staff)/tables' },
       { label: 'QR codes', sub: 'Download, reprint, or rotate table codes', icon: 'qr', bg: '#EAF1FF', fg: '#1F5BD6', route: '/(staff)/tables' },
     ],

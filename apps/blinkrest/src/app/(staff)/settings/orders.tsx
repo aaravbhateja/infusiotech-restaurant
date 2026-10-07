@@ -89,13 +89,6 @@ function OrderSettingsScreen() {
             style={{ height: 50, borderRadius: 14, borderWidth: 1.5, borderColor: colors.inputBorder, paddingHorizontal: 16, fontSize: 16, color: colors.ink900, backgroundColor: '#FFFFFF' }}
           />
         </View>
-
-        <View style={{ backgroundColor: colors.surface, borderRadius: 22, borderWidth: 1, borderColor: '#F4ECE6', padding: 16, gap: 8 }}>
-          <Text style={{ fontSize: 15, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>KOT printing</Text>
-          <Text style={{ fontSize: 13, color: colors.ink500 }}>
-            Automatic kitchen ticket printing needs a connected printer — not set up yet. Orders still show in the live Kitchen queue either way.
-          </Text>
-        </View>
       </ScrollView>
 
       <View style={{ backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.line, padding: 16, paddingBottom: 28 }}>
