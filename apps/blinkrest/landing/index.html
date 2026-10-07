@@ -295,7 +295,7 @@ main .wrap { perspective: 1600px; }
 .phone { position: relative; width: min(46%, 250px); aspect-ratio: 9 / 18.5; transform-style: preserve-3d; }
 .phone .th { position: absolute; inset: 0; border-radius: 38px; background: #0d0b0a; transform: translateZ(var(--z)); }
 .phone .body { position: absolute; inset: 0; border-radius: 38px; padding: 9px; background: linear-gradient(145deg, #4a403b, #14100f); box-shadow: 0 50px 70px -28px rgba(27, 23, 22, .6); }
-.screen { position: relative; width: 100%; height: 100%; border-radius: 30px; overflow: hidden; background: #D9381A; }
+.screen { position: relative; width: 100%; height: 100%; border-radius: 30px; overflow: hidden; background: #D9381A; isolation: isolate; -webkit-mask-image: -webkit-radial-gradient(white, black); }
 .notch { position: absolute; top: 9px; left: 50%; width: 30%; height: 15px; margin-left: -15%; border-radius: var(--r-pill); background: #0d0b0a; z-index: 3; }
 .screen video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .6s; z-index: 2; cursor: pointer; }
 .screen.has-video video { opacity: 1; }
@@ -340,6 +340,12 @@ main .wrap { perspective: 1600px; }
   .float { animation: bob 5s ease-in-out infinite; }
   .f2 { animation-delay: -1.2s; } .f3 { animation-delay: -2.4s; } .f4 { animation-delay: -3.6s; }
   @keyframes bob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -9px; } }
+}
+
+/* Touch screens: hold the phone at a fixed tilt. Video inside a continuously
+   animated 3D rig is unreliable on mobile GPUs, and it saves battery. */
+@media (hover: none) {
+  .sway { animation: none; transform: rotateY(-10deg) rotateX(3deg); }
 }
 
 /* Pointer tilt for fine pointers only */
@@ -440,7 +446,7 @@ main .wrap { perspective: 1600px; }
               <div class="screen" id="screen">
                 <div class="notch"></div>
                 <button class="sound" id="sound" type="button" aria-pressed="false" aria-label="Turn sound on"><i class="ph ph-speaker-x" aria-hidden="true"></i><span>Tap for sound</span></button>
-                <video id="reel" muted loop playsinline preload="metadata" aria-label="BlinkRest in action"></video>
+                <video id="reel" muted loop playsinline preload="auto" aria-label="BlinkRest in action"></video>
                 <div class="fallback">
                   <div class="tent">
                     <div class="brand"><svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="15" fill="none" stroke="#FF5A36" stroke-width="5.5"/><path d="M27.5 4.5 13 27.5h10l-3.5 16L35 19.5H25z" fill="#1B1716" stroke="#FFFFFF" stroke-width="3.2" stroke-linejoin="round"/></svg><span>Blink<b>Rest</b></span></div>
@@ -818,13 +824,23 @@ main .wrap { perspective: 1600px; }
   var VIDEO_SRC = '/landing/video/blinkrest-reel.mp4';
   var screenEl = document.getElementById('screen'), vid = document.getElementById('reel');
   vid.muted = true;
-  fetch(VIDEO_SRC, { method: 'HEAD' }).then(function (r) {
-    if (r.ok && (r.headers.get('content-type') || '').indexOf('video') === 0) vid.src = VIDEO_SRC;
-  }).catch(function () {});
-  vid.addEventListener('loadeddata', function () {
-    screenEl.classList.add('has-video');
-    if (!reduce) vid.play().catch(function () {});
+  vid.setAttribute('playsinline', '');
+  vid.setAttribute('webkit-playsinline', '');
+  // Phones only fetch metadata until play() is called, so start playback right
+  // away instead of waiting for a data event. The QR card stays if the file
+  // fails to load. If autoplay is refused (low power mode, data saver), seek a
+  // hair in so a frame paints, and the sound button starts playback on tap.
+  function showVideo() { screenEl.classList.add('has-video'); }
+  ['loadeddata', 'canplay', 'playing', 'seeked'].forEach(function (ev) { vid.addEventListener(ev, showVideo); });
+  vid.addEventListener('loadedmetadata', function () {
+    if (vid.paused) { try { vid.currentTime = 0.05; } catch (e) {} }
   });
+  vid.preload = 'auto';
+  vid.src = VIDEO_SRC;
+  if (!reduce) {
+    var started = vid.play();
+    if (started && started.catch) started.catch(function () {});
+  }
   // Sound. Browsers block autoplay with audio, so the reel starts muted. Audio
   // turns on from the sound button, a tap on the phone, or the visitor's first
   // tap or key press anywhere while the phone is on screen. After they mute it
