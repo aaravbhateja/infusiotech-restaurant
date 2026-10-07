@@ -76,6 +76,13 @@ EXPO_PUBLIC_ORDER_BASE_URL=https://blinkrest.com   # must match wherever this is
 ```
 To redeploy after changes: `cd apps/blinkrest && vercel deploy --prod`.
 
+The marketing landing page at `https://blinkrest.com/` is plain HTML in
+`apps/blinkrest/landing/`. The Vercel build command runs
+`node scripts/add-landing.js` after `expo export`, which copies it over
+`dist/index.html` (fonts and images go to `dist/landing/`). To add the real
+Google Play and App Store links, fill in the `STORE` object near the bottom
+of `landing/index.html`.
+
 The domain `blinkrest.com` is registered at Spaceship and uses Spaceship's
 nameservers (its Google Workspace mail records live there, so don't switch
 to Vercel's nameservers). It is attached to the Vercel project, with these
