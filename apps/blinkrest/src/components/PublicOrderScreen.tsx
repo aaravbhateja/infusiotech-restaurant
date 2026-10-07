@@ -470,7 +470,7 @@ export function PublicOrderScreen({ token, previewTenantId, onBack }: { token?: 
     if (!guardOnline(isOnline)) return;
     setCallingWaiter(true);
     try {
-      await callFn('call-waiter', { token });
+      await callFn('call-waiter', { token, kind });
       if (kind === 'bill') setBillRequested(true);
       else setWaiterCalled(true);
     } catch {

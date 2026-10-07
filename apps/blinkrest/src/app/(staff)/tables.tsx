@@ -38,7 +38,8 @@ function TablesScreen() {
     const { data: activeOrders } = await supabase
       .from('orders')
       .select('table_id, total_minor, created_at')
-      .not('order_status', 'in', '(served,rejected,cancelled)');
+      .not('order_status', 'in', '(rejected,cancelled)')
+      .is('table_released_at', null);
 
     const byTable = new Map<string, { total: number; since: string }>();
     for (const o of activeOrders ?? []) {

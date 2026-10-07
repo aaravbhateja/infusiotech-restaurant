@@ -17,7 +17,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: 'method_not_allowed' }), { status: 405, headers: corsHeaders });
   }
 
-  const { token } = await req.json().catch(() => ({ token: null }));
+  const { token, kind } = await req.json().catch(() => ({ token: null, kind: null }));
   if (!token || typeof token !== 'string') {
     return new Response(JSON.stringify({ error: 'missing_token' }), { status: 400, headers: corsHeaders });
   }
@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
     .join('');
 
   const admin = createClient(supabaseUrl, serviceRoleKey);
-  const { error } = await admin.rpc('notify_waiter_call', { p_table_token_hash: tokenHash });
+  const { error } = await admin.rpc('notify_waiter_call', { p_table_token_hash: tokenHash, p_kind: kind === 'bill' ? 'bill' : 'help' });
 
   if (error) {
     return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: corsHeaders });

@@ -90,7 +90,7 @@ export default function Home() {
         .gte('created_at', monthAgo.toISOString())
         .not('order_status', 'in', '(rejected,cancelled)'),
       supabase.from('restaurant_tables').select('id, floor_state').eq('status', 'active').order('label'),
-      supabase.from('orders').select('table_id').in('order_status', ['new', 'accepted', 'preparing', 'ready', 'served']).eq('payment_status', 'unpaid').not('table_id', 'is', null),
+      supabase.from('orders').select('table_id').not('order_status', 'in', '(rejected,cancelled)').is('table_released_at', null).not('table_id', 'is', null),
       supabase.from('payments').select('amount_minor, method').in('status', ['paid', 'cash_received', 'reconciled']).gte('created_at', startOfDay.toISOString()),
       supabase.from('orders').select('total_minor').eq('payment_status', 'unpaid').not('order_status', 'in', '(rejected,cancelled)'),
       supabase.from('customers').select('id, name').order('created_at', { ascending: false }).limit(4),

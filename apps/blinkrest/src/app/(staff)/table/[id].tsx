@@ -65,7 +65,8 @@ function TableDetailScreen() {
       .from('orders')
       .select('id, order_number, order_status, payment_status, total_minor, guest_count')
       .eq('table_id', id)
-      .not('order_status', 'in', '(served,rejected,cancelled)')
+      .not('order_status', 'in', '(rejected,cancelled)')
+      .is('table_released_at', null)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -187,7 +188,7 @@ function TableDetailScreen() {
     setLoadingFreeTables(true);
     const [{ data: allTables }, { data: occupiedOrders }] = await Promise.all([
       supabase.from('restaurant_tables').select('id, label').neq('id', id).eq('status', 'active').order('label'),
-      supabase.from('orders').select('table_id').not('table_id', 'is', null).not('order_status', 'in', '(served,rejected,cancelled)'),
+      supabase.from('orders').select('table_id').not('table_id', 'is', null).not('order_status', 'in', '(rejected,cancelled)').is('table_released_at', null),
     ]);
     const occupiedIds = new Set((occupiedOrders ?? []).map((o) => o.table_id));
     setFreeTables((allTables ?? []).filter((t) => !occupiedIds.has(t.id)));

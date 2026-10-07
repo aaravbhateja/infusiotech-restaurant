@@ -29,6 +29,7 @@ export default function ManagerHome() {
   const isOnline = useIsOnline();
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [tableCount, setTableCount] = useState(0);
+  const [seatedTables, setSeatedTables] = useState(0);
   const [revenueToday, setRevenueToday] = useState(0);
   const [team, setTeam] = useState<Member[]>([]);
   const [discountRequests, setDiscountRequests] = useState<DiscountRequest[]>([]);
@@ -36,7 +37,7 @@ export default function ManagerHome() {
 
   const load = useCallback(async () => {
     if (!membership) return;
-    const [{ data: liveOrders }, { count: tables }, { data: team0 }, { data: discounts }, { data: tenant }] = await Promise.all([
+    const [{ data: liveOrders }, { count: tables }, { data: team0 }, { data: discounts }, { data: tenant }, { data: seatedRows }] = await Promise.all([
       supabase
         .from('orders')
         .select('id, order_number, order_status, total_minor, created_at, table_id, table:restaurant_tables(label)')
@@ -48,7 +49,9 @@ export default function ManagerHome() {
         ? supabase.from('discount_requests').select('id, order_id, amount_minor, reason, order:orders(order_number)').eq('status', 'pending').order('created_at')
         : Promise.resolve({ data: [] }),
       supabase.from('tenants').select('logo_path').eq('id', membership.tenantId).maybeSingle(),
+      supabase.from('orders').select('table_id').not('table_id', 'is', null).not('order_status', 'in', '(rejected,cancelled)').is('table_released_at', null),
     ]);
+    setSeatedTables(new Set((seatedRows ?? []).map((o) => o.table_id)).size);
     setLogoPath(tenant?.logo_path ?? null);
     setOrders((liveOrders as unknown as OrderRow[]) ?? []);
     setTableCount(tables ?? 0);
@@ -86,7 +89,6 @@ export default function ManagerHome() {
     };
   }, [membership, load]);
 
-  const seatedTables = new Set(orders.filter((o) => o.table_id).map((o) => o.table_id)).size;
   const kitchenLoad = orders.filter((o) => o.order_status === 'accepted' || o.order_status === 'preparing').length;
 
   const alerts = useMemo(() => {
