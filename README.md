@@ -4,7 +4,7 @@
 
 Guests scan a QR code on their table, browse the menu, order and pay from their phone, without installing anything. Restaurant staff run everything from one mobile app: live orders, menu, tables, payments, staff and analytics. Each person sees only what their role allows.
 
-- **Live web app (guest ordering):** https://blinkrest.vercel.app
+- **Live web app (guest ordering):** https://blinkrest.com
 - **Staff app:** iOS and Android, built from the same codebase
 
 ---
@@ -49,7 +49,7 @@ Guests scan a QR code on their table, browse the menu, order and pay from their 
 
 1. **Owner signs up** in the app, creates the restaurant and becomes its Owner.
 2. **Builds the menu** (categories, items, prices, photos) and **adds tables**. Each table gets a unique QR code.
-3. **Guests scan the QR**, which opens `https://blinkrest.vercel.app/order/<token>` in their browser. No app or login needed.
+3. **Guests scan the QR**, which opens `https://blinkrest.com/order/<token>` in their browser. No app or login needed.
 4. **Orders show up live** for staff, who move them through the kitchen workflow while the guest's tracking screen updates.
 5. **Payment** happens either online (Razorpay, once the restaurant has passed KYC) or at the table (cash/UPI recorded by staff).
 
@@ -260,7 +260,7 @@ Create `apps/blinkrest/.env` (already ignored by git):
 EXPO_PUBLIC_SUPABASE_URL=https://<your-project-ref>.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=<your-anon-public-key>
 # Optional. Base URL printed into table QR codes:
-EXPO_PUBLIC_ORDER_BASE_URL=https://blinkrest.vercel.app
+EXPO_PUBLIC_ORDER_BASE_URL=https://blinkrest.com
 ```
 
 Find both Supabase values in the Supabase dashboard under *Project Settings → API*.

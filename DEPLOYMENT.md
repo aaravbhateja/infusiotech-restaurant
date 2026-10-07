@@ -56,7 +56,9 @@ from the same source. The web build is what table QR codes point guests to
 
 ### Web (customer QR ordering) — deployed on Vercel
 
-Already live at **https://blinkrest.vercel.app**, deployed from
+Already live at **https://blinkrest.com** (also reachable at
+`https://www.blinkrest.com` and the original `https://blinkrest.vercel.app`),
+deployed from
 `apps/blinkrest` with:
 ```
 buildCommand: npx expo export -p web
@@ -70,12 +72,23 @@ params). Production env vars are set directly on the Vercel project
 ```
 EXPO_PUBLIC_SUPABASE_URL
 EXPO_PUBLIC_SUPABASE_ANON_KEY
-EXPO_PUBLIC_ORDER_BASE_URL=https://blinkrest.vercel.app   # must match wherever this is deployed
+EXPO_PUBLIC_ORDER_BASE_URL=https://blinkrest.com   # must match wherever this is deployed
 ```
 To redeploy after changes: `cd apps/blinkrest && vercel deploy --prod`.
-To point it at a custom domain, add the domain in the Vercel project
-settings, then update `EXPO_PUBLIC_ORDER_BASE_URL` to match and redeploy —
-new table QR codes (and any reissued ones) will use the new base URL.
+
+The domain `blinkrest.com` is registered at Spaceship and uses Spaceship's
+nameservers (its Google Workspace mail records live there, so don't switch
+to Vercel's nameservers). It is attached to the Vercel project, with these
+records in Spaceship → Advanced DNS:
+```
+A      @     76.76.21.21
+CNAME  www   cname.vercel-dns.com
+```
+To use a different domain, add it to the Vercel project (`vercel domains add
+<domain> blinkrest`), set those records at its DNS provider, then update
+`EXPO_PUBLIC_ORDER_BASE_URL` to match and redeploy — new table QR codes (and
+any reissued ones) will use the new base URL. QR codes printed earlier with
+the `blinkrest.vercel.app` address keep working.
 
 Razorpay is not wired into checkout yet — online payment is still a design
 placeholder in the customer flow; today's only working payment path is
@@ -102,7 +115,7 @@ handles the native projects via Continuous Native Generation.
    only time it's shown — tap **New QR** on the table later to reissue if
    you lose the printed copy, which retires the old one).
 4. Scan that QR with any phone, or open the printed URL directly (it's
-   `https://blinkrest.vercel.app/order/<token>` in production) — the menu
+   `https://blinkrest.com/order/<token>` in production) — the menu
    you just built should load.
 5. Add an item, place the order (pay at counter).
 6. Back in the app → **Orders** — the order appears in real time; tap it to
