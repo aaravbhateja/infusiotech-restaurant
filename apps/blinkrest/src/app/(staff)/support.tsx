@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon, type IconName } from '@/components/Icon';
 import { useAuth } from '@/hooks/useAuth';
-import { SUPPORT_EMAIL, SUPPORT_PHONE } from '@/lib/contact';
+import { SUPPORT_EMAIL } from '@/lib/contact';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts, radius } from '@/theme/tokens';
 
@@ -80,10 +80,6 @@ export default function Support() {
         <View style={{ backgroundColor: colors.coral500, borderRadius: 26, padding: 18, gap: 14 }}>
           <Text style={{ fontSize: 24, fontFamily: fonts.display, color: colors.ink900, lineHeight: 29 }}>How can we help, {membership?.tenantName}?</Text>
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Pressable onPress={() => Linking.openURL(`tel:${SUPPORT_PHONE}`)} style={{ flex: 1, height: 70, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-              <Icon name="phone" size={21} color={colors.ink900} />
-              <Text style={{ fontSize: 13, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>Call us</Text>
-            </Pressable>
             <Pressable onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`)} style={{ flex: 1, height: 70, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
               <Icon name="mail" size={21} color={colors.ink900} />
               <Text style={{ fontSize: 13, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>Email</Text>

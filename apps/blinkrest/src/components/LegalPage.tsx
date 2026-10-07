@@ -4,7 +4,7 @@ import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/Icon';
-import { SUPPORT_EMAIL, SUPPORT_PHONE, SUPPORT_PHONE_DISPLAY } from '@/lib/contact';
+import { SUPPORT_EMAIL } from '@/lib/contact';
 import { colors, fonts } from '@/theme/tokens';
 
 export type LegalBlock = string | { bullets: string[] } | { label: string };
@@ -80,10 +80,6 @@ export function LegalPage({
             <Pressable onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 36 }}>
               <Icon name="mail" size={18} color={colors.coral600} />
               <Text style={{ fontSize: 15, fontFamily: fonts.bodyBold, color: colors.coral600 }}>{SUPPORT_EMAIL}</Text>
-            </Pressable>
-            <Pressable onPress={() => Linking.openURL(`tel:${SUPPORT_PHONE}`)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 36 }}>
-              <Icon name="phone" size={18} color={colors.coral600} />
-              <Text style={{ fontSize: 15, fontFamily: fonts.bodyBold, color: colors.coral600 }}>{SUPPORT_PHONE_DISPLAY}</Text>
             </Pressable>
           </View>
         </View>
