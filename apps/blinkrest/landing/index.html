@@ -325,6 +325,13 @@ main .wrap { perspective: 1600px; }
 .coin .face svg { width: 62%; height: 62%; }
 .coin .back { transform: rotateY(180deg); background: #1B1716; box-shadow: inset 0 0 0 5px #FFC93C; }
 
+/* Order-flow video (rendered with HyperFrames). The CSS card stack below stays
+   as the fallback until the video has loaded. */
+.flow-video { display: none; margin-top: 26px; border-radius: 18px; overflow: hidden; aspect-ratio: 4 / 3; background: #120F0E; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
+.flow-video video { display: block; width: 100%; height: 100%; object-fit: cover; }
+.track.has-flow .flow-video { display: block; }
+.track.has-flow .iso { display: none; }
+
 /* Isometric status stack */
 .track { perspective: 1100px; }
 .iso.ladder { display: block; position: relative; height: 340px; margin-top: 34px; transform-style: preserve-3d; transform: rotateX(54deg) rotateZ(-22deg); transition: transform .7s cubic-bezier(.16, 1, .3, 1); }
@@ -516,6 +523,7 @@ main .wrap { perspective: 1600px; }
     <aside class="track reveal" aria-label="Live order tracking">
       <h3>Guests watch their order move.</h3>
       <p>The tracking screen updates as your team works.</p>
+      <div class="flow-video"><video id="flowvid" muted loop playsinline preload="auto" aria-label="An order travelling through New, Accepted, Preparing, Ready and Served on a 3D board"></video></div>
       <ul class="ladder iso">
         <li style="--i:0"><span class="chip s-new">New</span><span class="t">Order placed</span></li>
         <li style="--i:1"><span class="chip s-accepted">Accepted</span><span class="t">Kitchen has it</span></li>
@@ -887,6 +895,28 @@ main .wrap { perspective: 1600px; }
     if (document.hidden) vid.pause();
     else if (screenEl.classList.contains('has-video') && phoneVisible && !reduce) vid.play().catch(function () {});
   });
+
+  // 3D order-flow video in the tracking panel. Same approach as the reel:
+  // start playback right away, show it once a frame is ready, pause off screen.
+  var flowPanel = document.querySelector('.track'), flowVid = document.getElementById('flowvid');
+  if (flowPanel && flowVid) {
+    flowVid.muted = true;
+    function showFlow() { flowPanel.classList.add('has-flow'); }
+    ['loadeddata', 'canplay', 'playing', 'seeked'].forEach(function (ev) { flowVid.addEventListener(ev, showFlow); });
+    flowVid.addEventListener('loadedmetadata', function () {
+      if (flowVid.paused) { try { flowVid.currentTime = 0.05; } catch (e) {} }
+    });
+    flowVid.src = '/landing/video/order-flow.mp4';
+    if (!reduce) { var fp = flowVid.play(); if (fp && fp.catch) fp.catch(function () {}); }
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver(function (es) {
+        es.forEach(function (e) {
+          if (!flowPanel.classList.contains('has-flow') || reduce) return;
+          if (e.isIntersecting) flowVid.play().catch(function () {}); else flowVid.pause();
+        });
+      }, { threshold: 0.2 }).observe(flowPanel);
+    }
+  }
 })();
 </script>
 </body>

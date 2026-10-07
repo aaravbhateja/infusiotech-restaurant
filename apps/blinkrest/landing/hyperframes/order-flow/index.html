@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=960, height=720" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      @font-face { font-family: "Bricolage Grotesque"; src: url("assets/fonts/BricolageGrotesque_800ExtraBold.ttf") format("truetype"); font-weight: 800; }
+      @font-face { font-family: "Figtree"; src: url("assets/fonts/Figtree_600SemiBold.ttf") format("truetype"); font-weight: 600; }
+      @font-face { font-family: "Figtree"; src: url("assets/fonts/Figtree_700Bold.ttf") format("truetype"); font-weight: 700; }
+
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 960px; height: 720px; overflow: hidden; background: #120f0e; }
+      #root { position: relative; width: 960px; height: 720px; overflow: hidden; font-family: "Figtree", system-ui, sans-serif; color: #fff8f3; }
+
+      #bg { position: absolute; inset: 0; background:
+        radial-gradient(520px 420px at 82% 8%, rgba(255, 90, 54, 0.30), transparent 70%),
+        radial-gradient(560px 460px at 8% 100%, rgba(255, 201, 60, 0.14), transparent 70%),
+        linear-gradient(180deg, #1b1716, #0f0c0b); }
+
+      /* Screen-space caption */
+      #hud { position: absolute; left: 56px; top: 44px; width: 520px; height: 120px; }
+      .hud-item { position: absolute; left: 0; top: 0; opacity: 0; }
+      .hud-chip { display: inline-flex; align-items: center; height: 40px; padding: 0 20px; border-radius: 999px; font: 700 20px/1 "Figtree", sans-serif; }
+      .hud-line { margin-top: 14px; font: 800 46px/1.05 "Bricolage Grotesque", sans-serif; letter-spacing: -0.03em; }
+
+      /* 3D board */
+      #stage3d { position: absolute; inset: 0; perspective: 1500px; perspective-origin: 50% 46%; }
+      #world { position: absolute; left: 50%; top: 58%; width: 680px; height: 648px; transform-style: preserve-3d; }
+      .slab { position: absolute; left: 0; width: 680px; height: 96px; border-radius: 24px; transform-style: preserve-3d;
+        background: rgba(255, 255, 255, 0.07); border: 2px solid rgba(255, 255, 255, 0.14);
+        box-shadow: 0 30px 40px -24px rgba(0, 0, 0, 0.9); display: flex; align-items: center; justify-content: space-between; padding: 0 26px; }
+      .slab .chip { display: inline-flex; align-items: center; height: 42px; padding: 0 22px; border-radius: 999px; font: 700 22px/1 "Figtree", sans-serif; }
+      .slab .note { font: 600 22px/1 "Figtree", sans-serif; color: #e3d9d3; }
+      .s0 { top: 0; } .s1 { top: 138px; } .s2 { top: 276px; } .s3 { top: 414px; } .s4 { top: 552px; }
+
+      #shadow { position: absolute; left: 210px; top: 8px; width: 280px; height: 80px; border-radius: 40px; background: rgba(0, 0, 0, 0.55); filter: blur(18px); }
+      #token { position: absolute; left: 210px; top: 4px; width: 280px; height: 88px; border-radius: 24px; transform-style: preserve-3d;
+        background: linear-gradient(135deg, #d9381a, #a82a0c); box-shadow: 0 0 60px rgba(255, 90, 54, 0.55), inset 0 0 0 3px rgba(255, 255, 255, 0.35);
+        display: flex; align-items: center; gap: 14px; padding: 0 20px; color: #fff; }
+      #token svg { width: 46px; height: 46px; flex: none; }
+      #token b { display: block; font: 800 26px/1 "Bricolage Grotesque", sans-serif; letter-spacing: -0.02em; }
+      #token small { display: block; margin-top: 6px; font: 600 16px/1 "Figtree", sans-serif; }
+
+      .c-new { background: #fff1ec; color: #c2330f; }
+      .c-acc { background: #eaf1ff; color: #1f5bd6; }
+      .c-prep { background: #fff4d6; color: #8a5a00; }
+      .c-ready { background: #e8f7ee; color: #0b7a3e; }
+      .c-served { background: #f1ebff; color: #5b21b6; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="10" data-width="960" data-height="720">
+      <div id="bg" class="clip" data-start="0" data-duration="10" data-track-index="0"></div>
+
+      <div id="stage3d" class="clip" data-start="0" data-duration="10" data-track-index="1">
+        <div id="world">
+          <div class="slab s0" id="slab0"><span class="chip c-new">New</span><span class="note">Order placed</span></div>
+          <div class="slab s1" id="slab1"><span class="chip c-acc">Accepted</span><span class="note">Kitchen has it</span></div>
+          <div class="slab s2" id="slab2"><span class="chip c-prep">Preparing</span><span class="note">On the stove</span></div>
+          <div class="slab s3" id="slab3"><span class="chip c-ready">Ready</span><span class="note">Up at the pass</span></div>
+          <div class="slab s4" id="slab4"><span class="chip c-served">Served</span><span class="note">Enjoy</span></div>
+          <div id="shadow"></div>
+          <div id="token">
+            <svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="15" fill="none" stroke="#ffffff" stroke-width="5.5" /><path d="M27.5 4.5 13 27.5h10l-3.5 16L35 19.5H25z" fill="#ffc93c" stroke="#d9381a" stroke-width="3.2" stroke-linejoin="round" /></svg>
+            <div><b>Your order</b><small>Table 7</small></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="hud" class="clip" data-start="0" data-duration="10" data-track-index="2">
+        <div class="hud-item" id="h0"><span class="hud-chip c-new">New</span><div class="hud-line">Order placed</div></div>
+        <div class="hud-item" id="h1"><span class="hud-chip c-acc">Accepted</span><div class="hud-line">Kitchen has it</div></div>
+        <div class="hud-item" id="h2"><span class="hud-chip c-prep">Preparing</span><div class="hud-line">On the stove</div></div>
+        <div class="hud-item" id="h3"><span class="hud-chip c-ready">Ready</span><div class="hud-line">Up at the pass</div></div>
+        <div class="hud-item" id="h4"><span class="hud-chip c-served">Served</span><div class="hud-line">Enjoy your meal</div></div>
+      </div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+
+      var STEP = 138; // vertical distance between slabs
+      var Z_TOKEN = 74;
+      var colors = ["#ff5a36", "#1f5bd6", "#e8a400", "#0b7a3e", "#8a52e0"]; // slab accents, one per status
+      var tl = gsap.timeline({ paused: true });
+
+      // 3D camera: set once through GSAP so there is a single transform owner.
+      gsap.set("#world", { xPercent: -50, yPercent: -50, rotationX: 58, rotationZ: -24, scale: 0.82, transformOrigin: "50% 50%" });
+      gsap.set("#token", { y: 0, z: Z_TOKEN, opacity: 1 });
+      gsap.set("#shadow", { y: 0, z: 2, opacity: 0.9 });
+      gsap.set(".hud-item", { opacity: 0, y: 10 });
+      gsap.set("#h0", { opacity: 1, y: 0 });
+
+      function activate(i, at) {
+        tl.to("#slab" + i, { z: 34, backgroundColor: "rgba(255,255,255,0.16)", borderColor: colors[i], boxShadow: "0 40px 56px -26px rgba(0,0,0,0.95), 0 0 36px " + colors[i] + "55", duration: 0.5, ease: "power2.out" }, at);
+      }
+      function settle(i, at) {
+        tl.to("#slab" + i, { z: 12, backgroundColor: "rgba(255,255,255,0.10)", borderColor: "rgba(255,255,255,0.22)", boxShadow: "0 30px 40px -24px rgba(0,0,0,0.9)", duration: 0.5, ease: "power2.out" }, at);
+      }
+      function swapHud(from, to, at) {
+        tl.to("#h" + from, { opacity: 0, y: -10, duration: 0.3, ease: "power1.in" }, at);
+        tl.fromTo("#h" + to, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" }, at + 0.25);
+      }
+      function hop(to, at) {
+        // token rises, glides along the board, then lands on the next slab
+        tl.to("#token", { z: Z_TOKEN + 46, duration: 0.3, ease: "power2.out" }, at);
+        tl.to("#token", { y: to * STEP, duration: 0.8, ease: "power2.inOut" }, at);
+        tl.to("#shadow", { y: to * STEP, duration: 0.8, ease: "power2.inOut" }, at);
+        tl.to("#token", { z: Z_TOKEN, duration: 0.4, ease: "bounce.out" }, at + 0.55);
+      }
+
+      // Start state: first slab active.
+      activate(0, 0);
+
+      // New -> Accepted -> Preparing -> Ready -> Served
+      var times = [1.6, 3.4, 5.2, 7.0];
+      for (var k = 0; k < 4; k++) {
+        var t = times[k];
+        hop(k + 1, t);
+        settle(k, t);
+        activate(k + 1, t + 0.7);
+        swapHud(k, k + 1, t + 0.55);
+      }
+
+      // Served: a small celebratory pulse on the token.
+      tl.to("#token", { scale: 1.07, duration: 0.35, ease: "power2.out", yoyo: true, repeat: 1 }, 8.1);
+
+      // Reset so the last frame matches the first and the video loops cleanly.
+      tl.to("#token", { opacity: 0, duration: 0.35, ease: "power1.in" }, 9.2);
+      tl.to("#shadow", { opacity: 0, duration: 0.35, ease: "power1.in" }, 9.2);
+      for (var s = 0; s < 5; s++) {
+        tl.to("#slab" + s, { z: 0, backgroundColor: "rgba(255,255,255,0.07)", borderColor: "rgba(255,255,255,0.14)", boxShadow: "0 30px 40px -24px rgba(0,0,0,0.9)", duration: 0.5, ease: "power2.inOut" }, 9.3);
+      }
+      tl.to("#h4", { opacity: 0, y: -10, duration: 0.3, ease: "power1.in" }, 9.25);
+      tl.set("#token", { y: 0, scale: 1, z: Z_TOKEN }, 9.55);
+      tl.set("#shadow", { y: 0 }, 9.55);
+      tl.to("#token", { opacity: 1, duration: 0.4, ease: "power1.out" }, 9.6);
+      tl.to("#shadow", { opacity: 0.9, duration: 0.4, ease: "power1.out" }, 9.6);
+      tl.fromTo("#h0", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.4, ease: "power2.out", immediateRender: false }, 9.6);
+      activate(0, 9.6);
+
+      // Slow camera orbit: out and back, exactly 10s so it also loops.
+      tl.fromTo("#world", { rotationZ: -24 }, { rotationZ: -15, duration: 5, ease: "sine.inOut", yoyo: true, repeat: 1 }, 0);
+
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
