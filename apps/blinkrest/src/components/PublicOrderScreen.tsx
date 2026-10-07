@@ -132,6 +132,7 @@ export function PublicOrderScreen({ token, previewTenantId, onBack }: { token?: 
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [liveStatus, setLiveStatus] = useState<string | null>(null);
   const [livePaymentStatus, setLivePaymentStatus] = useState<'paid' | 'unpaid' | null>(null);
+  const [liveCancelReason, setLiveCancelReason] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [rating, setRating] = useState(0);
@@ -352,6 +353,7 @@ export function PublicOrderScreen({ token, previewTenantId, onBack }: { token?: 
         if (!cancelled && data) {
           setLiveStatus(data.order_status);
           setLivePaymentStatus(data.payment_status);
+          setLiveCancelReason(data.cancel_reason ?? null);
         }
       } catch {
         // ignore — next tick retries
@@ -503,6 +505,42 @@ export function PublicOrderScreen({ token, previewTenantId, onBack }: { token?: 
     const stepIndex = Math.max(0, TRACKING_STEPS.findIndex((s) => s.status === liveStatus));
     const isServed = liveStatus === 'served';
     const isPaid = (livePaymentStatus ?? confirmation.payment_status) === 'paid';
+    const isRejected = liveStatus === 'rejected' || liveStatus === 'cancelled';
+
+    // A rejected or cancelled order is a dead end: say so plainly instead of
+    // leaving the guest on a progress tracker that never moves.
+    if (isRejected) {
+      const rejected = liveStatus === 'rejected';
+      return (
+        <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ paddingBottom: 32 }}>
+          <Animated.View entering={FadeInDown} style={{ backgroundColor: colors.error, paddingTop: Math.max(insets.top + 32, 52), paddingBottom: 28, paddingHorizontal: 24, borderBottomLeftRadius: 32, borderBottomRightRadius: 32, alignItems: 'center', gap: 8 }}>
+            <View style={{ width: 76, height: 76, borderRadius: 38, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name="x" size={36} stroke={3} color={colors.error} />
+            </View>
+            <Text style={{ fontSize: 26, fontFamily: fonts.display, color: '#FFFFFF', textAlign: 'center' }}>{rejected ? 'Order not accepted' : 'Order cancelled'}</Text>
+            <Text style={{ fontSize: 15, color: '#FFFFFF', textAlign: 'center' }}>Order #{confirmation.order_number} · {info.table.label}</Text>
+          </Animated.View>
+          <View style={{ padding: 20, gap: 14 }}>
+            <View style={{ backgroundColor: colors.errorBg, borderRadius: radius.lg, padding: 16, gap: 6 }}>
+              <Text style={{ fontSize: 14, fontFamily: fonts.bodyExtraBold, color: colors.error }}>{rejected ? 'The restaurant couldn’t take this order.' : 'This order was cancelled by the restaurant.'}</Text>
+              {liveCancelReason ? <Text style={{ fontSize: 14, color: colors.ink900 }}>Reason: {liveCancelReason}</Text> : null}
+              <Text style={{ fontSize: 13, color: colors.ink700 }}>
+                {isPaid ? 'You paid for this order online — please ask the restaurant about your refund.' : 'You don’t owe anything for this order.'}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => {
+                if (token) AsyncStorage.removeItem(confirmationStorageKey(token)).catch(() => {});
+                setConfirmation(null);
+              }}
+              style={{ height: 54, borderRadius: radius.pill, backgroundColor: colors.ink900, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={{ color: '#FFFFFF', fontFamily: fonts.bodyExtraBold, fontSize: 16 }}>Order again</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      );
+    }
 
     return (
       <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ paddingBottom: 32 }}>
