@@ -1,1 +1,1 @@
-export const SUPPORT_EMAIL = 'support@infusiotech.com';
+export const SUPPORT_EMAIL = 'support@blinkrest.com';
