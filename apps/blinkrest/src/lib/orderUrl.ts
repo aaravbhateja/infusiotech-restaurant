@@ -13,7 +13,7 @@
 // baking one in is always wrong, in Expo Go, a simulator, or anywhere else
 // that isn't the real deployment. EXPO_PUBLIC_ORDER_BASE_URL overrides this
 // only for pointing at a *different real deployment* (e.g. staging).
-const PRODUCTION_ORDER_BASE_URL = 'https://blinkrest.vercel.app';
+const PRODUCTION_ORDER_BASE_URL = 'https://blinkrest.com';
 
 function baseUrl(): string {
   const envBase = process.env.EXPO_PUBLIC_ORDER_BASE_URL;
