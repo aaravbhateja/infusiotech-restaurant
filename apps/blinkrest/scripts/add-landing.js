@@ -16,5 +16,8 @@ if (!fs.existsSync(dist)) {
 
 fs.cpSync(path.join(src, 'fonts'), path.join(dist, 'landing', 'fonts'), { recursive: true });
 fs.cpSync(path.join(src, 'img'), path.join(dist, 'landing', 'img'), { recursive: true });
+if (fs.existsSync(path.join(src, 'video'))) {
+  fs.cpSync(path.join(src, 'video'), path.join(dist, 'landing', 'video'), { recursive: true });
+}
 fs.copyFileSync(path.join(src, 'index.html'), path.join(dist, 'index.html'));
 console.log('Landing page added to dist/index.html');
