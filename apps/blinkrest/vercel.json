@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npx expo export -p web && node scripts/add-landing.js",
+  "buildCommand": "npx expo export -p web && node scripts/free-root.js",
   "outputDirectory": "dist",
   "headers": [
     {
@@ -12,6 +12,12 @@
     }
   ],
   "rewrites": [
+    { "source": "/", "destination": "https://blinkrest-site.vercel.app/" },
+    { "source": "/_next/:path*", "destination": "https://blinkrest-site.vercel.app/_next/:path*" },
+    { "source": "/images/:path*", "destination": "https://blinkrest-site.vercel.app/images/:path*" },
+    { "source": "/video/:path*", "destination": "https://blinkrest-site.vercel.app/video/:path*" },
+    { "source": "/icon.png", "destination": "https://blinkrest-site.vercel.app/icon.png" },
+    { "source": "/apple-icon.png", "destination": "https://blinkrest-site.vercel.app/apple-icon.png" },
     { "source": "/account-deletion", "destination": "/account-deletion.html" },
     { "source": "/accept-invite", "destination": "/accept-invite.html" },
     { "source": "/admin-login", "destination": "/admin-login.html" },
