@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,6 +11,7 @@ import { RequireAccess } from '@/components/RequireAccess';
 import { Skeleton } from '@/components/Skeleton';
 import { EmptyState, ErrorState, Snackbar } from '@/components/States';
 import { useAuth } from '@/hooks/useAuth';
+import { homePathForRole } from '@/lib/roleHome';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts, formatMinor, radius, shadow } from '@/theme/tokens';
 
@@ -361,6 +362,9 @@ function OrdersScreen() {
 }
 
 export default function Orders() {
+  const { membership } = useAuth();
+  // Kitchen staff work from their queue only.
+  if (membership?.roleName === 'Kitchen Staff') return <Redirect href={homePathForRole(membership.roleName)} />;
   return (
     <RequireAccess permission="orders.view">
       <OrdersScreen />

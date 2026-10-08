@@ -30,7 +30,8 @@ function useNavItems(): NavItem[] {
 
   const items: NavItem[] = [homeItem];
 
-  if (can('orders.view')) items.push({ key: 'orders', label: 'Orders', icon: 'orders', href: '/(staff)/orders' });
+  // Kitchen staff work from their queue only, not the orders list.
+  if (can('orders.view') && roleName !== 'Kitchen Staff') items.push({ key: 'orders', label: 'Orders', icon: 'orders', href: '/(staff)/orders' });
   if (can('menu.view')) {
     items.push(
       roleName === 'Kitchen Staff'
