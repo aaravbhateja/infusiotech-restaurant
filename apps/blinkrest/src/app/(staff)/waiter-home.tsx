@@ -24,7 +24,7 @@ type OrderRow = {
   table: { label: string } | null;
 };
 
-type ToCollect = { id: string; order_number: string; total_minor: number; table: { label: string } | null };
+type ToCollect = { id: string; order_number: string; total_minor: number; bill_requested_at: string | null; table: { label: string } | null };
 
 const STATUS_META: Record<string, { label: string; icon: 'bolt' | 'flame' | 'bell' | 'timer'; bg: string; fg: string }> = {
   new: { label: 'New order', icon: 'bolt', bg: colors.coral50, fg: colors.coral700 },
@@ -65,12 +65,12 @@ export default function WaiterHome() {
       const [{ data: unpaid }, { data: held }] = await Promise.all([
         supabase
           .from('orders')
-          .select('id, order_number, total_minor, table:restaurant_tables(label)')
-          .eq('served_by', membership.id)
+          .select('id, order_number, total_minor, bill_requested_at, table:restaurant_tables(label)')
+          .or(`served_by.eq.${membership.id},bill_requested_at.not.is.null`)
           .eq('order_status', 'served')
           .eq('payment_status', 'unpaid')
           .order('served_at', { ascending: false }),
-        supabase.from('payments').select('amount_minor').eq('collected_by', membership.id).eq('via_waiter', true).is('handover_id', null).eq('status', 'cash_received'),
+        supabase.from('payments').select('amount_minor').eq('collected_by', membership.id).eq('via_waiter', true).eq('method', 'cash').is('handover_id', null).eq('status', 'cash_received'),
       ]);
       setToCollect((unpaid as unknown as ToCollect[]) ?? []);
       setHeldMinor((held ?? []).reduce((sum, p) => sum + p.amount_minor, 0));
@@ -135,14 +135,15 @@ export default function WaiterHome() {
     }
   }
 
-  async function collectCash(o: ToCollect) {
+  async function collectPayment(o: ToCollect, method: 'upi' | 'card' | 'cash') {
     if (!guardOnline(isOnline)) return;
-    Alert.alert(`Collect ${formatMinor(o.total_minor)} cash?`, `${o.table?.label ?? 'Order'} · #${o.order_number}. Confirm you have received the cash from the guest.`, [
+    const label = method === 'upi' ? 'UPI' : method === 'card' ? 'Card' : 'Cash';
+    Alert.alert(`Record ${formatMinor(o.total_minor)} by ${label}?`, `${o.table?.label ?? 'Order'} · #${o.order_number}. Confirm the guest has paid.`, [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Cash received',
+        text: `${label} received`,
         onPress: async () => {
-          const { error } = await supabase.rpc('record_cash_payment', { p_order_id: o.id, p_method: 'cash' });
+          const { error } = await supabase.rpc('record_cash_payment', { p_order_id: o.id, p_method: method });
           if (error) Alert.alert('Could not record payment', error.message);
           load();
         },
@@ -221,7 +222,7 @@ export default function WaiterHome() {
           <View style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: '#F4ECE6', borderRadius: 22, padding: 14, gap: 10 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 12, fontFamily: fonts.bodyExtraBold, color: colors.ink700, letterSpacing: 0.6 }}>CASH IN MY HAND</Text>
+                <Text style={{ fontSize: 12, fontFamily: fonts.bodyExtraBold, color: colors.ink700, letterSpacing: 0.6 }}>BILLS & CASH IN MY HAND</Text>
                 <Text style={{ fontSize: 24, fontFamily: fonts.display, color: heldMinor > 0 ? colors.warning : colors.ink900 }}>{formatMinor(heldMinor)}</Text>
               </View>
               <Pressable onPress={() => router.push('/(staff)/cash' as never)} style={{ height: 40, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: colors.ink900, justifyContent: 'center' }}>
@@ -229,14 +230,23 @@ export default function WaiterHome() {
               </Pressable>
             </View>
             {toCollect.map((o) => (
-              <View key={o.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: 1, borderTopColor: '#F4ECE6', paddingTop: 10 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>{o.table?.label ?? 'Order'} · #{o.order_number}</Text>
-                  <Text style={{ fontSize: 12, color: colors.ink500 }}>Served by you · unpaid</Text>
+              <View key={o.id} style={{ gap: 8, borderTopWidth: 1, borderTopColor: '#F4ECE6', paddingTop: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>{o.table?.label ?? 'Order'} · #{o.order_number}</Text>
+                    <Text style={{ fontSize: 12, fontFamily: o.bill_requested_at ? fonts.bodyExtraBold : fonts.body, color: o.bill_requested_at ? colors.coral700 : colors.ink500 }}>
+                      {o.bill_requested_at ? 'Guest asked for the bill' : 'Served · unpaid'}
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 18, fontFamily: fonts.display, color: colors.ink900 }}>{formatMinor(o.total_minor)}</Text>
                 </View>
-                <Pressable onPress={() => collectCash(o)} style={{ height: 40, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: colors.success, justifyContent: 'center' }}>
-                  <Text style={{ fontFamily: fonts.bodyExtraBold, color: '#FFFFFF', fontSize: 13 }}>Collect {formatMinor(o.total_minor)}</Text>
-                </Pressable>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {([['upi', 'UPI'], ['card', 'Card'], ['cash', 'Cash']] as const).map(([m, label]) => (
+                    <Pressable key={m} onPress={() => collectPayment(o, m)} style={{ flex: 1, height: 42, borderRadius: radius.pill, backgroundColor: m === 'upi' ? colors.ink900 : colors.surface, borderWidth: m === 'upi' ? 0 : 1.5, borderColor: colors.inputBorder, alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontFamily: fonts.bodyExtraBold, fontSize: 13, color: m === 'upi' ? '#FFFFFF' : colors.ink900 }}>{label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
               </View>
             ))}
           </View>
