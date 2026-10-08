@@ -33,6 +33,8 @@ type Ticket = {
   order_number: string;
   order_status: 'accepted' | 'preparing' | 'ready';
   created_at: string;
+  round_started_at: string;
+  current_round: number;
   table: { label: string } | null;
   items: Item[];
 };
@@ -58,7 +60,7 @@ export default function KitchenHome() {
   const load = useCallback(async () => {
     const { data: orders } = await supabase
       .from('orders')
-      .select('id, order_number, order_status, created_at, table:restaurant_tables(label)')
+      .select('id, order_number, order_status, created_at, round_started_at, current_round, table:restaurant_tables(label)')
       .in('order_status', ['accepted', 'preparing'])
       .order('created_at');
     const list = (orders as unknown as Omit<Ticket, 'items'>[]) ?? [];
@@ -70,12 +72,12 @@ export default function KitchenHome() {
       setTickets([]);
       return;
     }
-    const { data: items } = await supabase.from('order_items').select('order_id, item_name_snapshot, quantity, menu_item:menu_items(station)').in('order_id', list.map((o) => o.id));
+    const { data: items } = await supabase.from('order_items').select('order_id, round, item_name_snapshot, quantity, menu_item:menu_items(station)').in('order_id', list.map((o) => o.id));
     setTickets(
       list.map((o) => ({
         ...o,
         items: (items ?? [])
-          .filter((i) => i.order_id === o.id)
+          .filter((i) => i.order_id === o.id && i.round === o.current_round)
           .map((i) => ({ item_name_snapshot: i.item_name_snapshot, quantity: i.quantity, station: (i.menu_item as any)?.station ?? 'general' })),
       })),
     );
@@ -161,7 +163,7 @@ export default function KitchenHome() {
 
         {visibleTickets.map((t, idx) => {
           const s = t.order_status;
-          const minutesLate = Math.floor((now - new Date(t.created_at).getTime()) / 60000);
+          const minutesLate = Math.floor((now - new Date(t.round_started_at).getTime()) / 60000);
           const isLate = minutesLate >= LATE_MINUTES;
           const head = isLate ? '#D9381A' : s === 'preparing' ? colors.saffron400 : colors.coral500;
           const btnLabel = s === 'accepted' ? 'Start cooking' : 'Mark ready';
@@ -178,10 +180,13 @@ export default function KitchenHome() {
               <View style={{ backgroundColor: head, paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 {isLate ? <PulsingDot /> : null}
                 <Text style={{ fontSize: 22, fontFamily: fonts.display, color: colors.ink900 }}>#{t.order_number}</Text>
-                <Text style={{ fontSize: 14, fontFamily: fonts.bodyExtraBold, color: colors.ink900, flex: 1 }}>{t.table?.label ?? 'Takeaway'}</Text>
+                <Text style={{ fontSize: 14, fontFamily: fonts.bodyExtraBold, color: colors.ink900, flex: 1 }}>
+                  {t.table?.label ?? 'Takeaway'}
+                  {t.current_round > 1 ? '  ·  ADDED ITEMS' : ''}
+                </Text>
                 <View style={{ height: 30, paddingHorizontal: 10, borderRadius: radius.pill, backgroundColor: 'rgba(255,255,255,0.92)', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <Icon name="clock" size={15} stroke={2.4} color={colors.ink900} />
-                  <Text style={{ fontSize: 14, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>{minutesSince(t.created_at)}</Text>
+                  <Text style={{ fontSize: 14, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>{minutesSince(t.round_started_at)}</Text>
                 </View>
               </View>
               <View style={{ padding: 14, gap: 8 }}>
