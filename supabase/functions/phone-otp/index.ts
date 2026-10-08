@@ -1,5 +1,5 @@
 // Public endpoint behind the mobile-number signup / password-reset screens.
-//   action "send"   — texts a 6-digit code via Fast2SMS
+//   action "send"   — sends a 6-digit code via WhatsApp (Cloud API), else Fast2SMS
 //   action "signup" — checks the code and creates the account with the password
 //   action "reset"  — checks the code and sets a new password
 // Codes are stored hashed, expire after 10 minutes, allow 5 wrong tries, and
@@ -13,6 +13,12 @@ import { corsHeaders, handleCors } from '../_shared/cors.ts';
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const fast2smsKey = Deno.env.get('FAST2SMS_API_KEY');
+// WhatsApp Business Cloud API (preferred when configured); Fast2SMS is the fallback.
+const waAccessToken = Deno.env.get('WHATSAPP_ACCESS_TOKEN');
+const waPhoneNumberId = Deno.env.get('WHATSAPP_PHONE_NUMBER_ID');
+const waTemplateName = Deno.env.get('WHATSAPP_OTP_TEMPLATE') ?? 'otp_code';
+const waTemplateLang = Deno.env.get('WHATSAPP_OTP_TEMPLATE_LANG') ?? 'en';
+const whatsappConfigured = Boolean(waAccessToken && waPhoneNumberId);
 
 const admin = createClient(supabaseUrl, serviceRoleKey);
 
@@ -53,8 +59,50 @@ function newCode() {
   return String(n).padStart(6, '0');
 }
 
+async function sendWhatsApp(ten: string, code: string): Promise<boolean> {
+  // Meta's authentication templates carry the code in the body and again in the
+  // "copy code" button, so both components need it.
+  const res = await fetch(`https://graph.facebook.com/v21.0/${waPhoneNumberId}/messages`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${waAccessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      to: `91${ten}`,
+      type: 'template',
+      template: {
+        name: waTemplateName,
+        language: { code: waTemplateLang },
+        components: [
+          { type: 'body', parameters: [{ type: 'text', text: code }] },
+          { type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: code }] },
+        ],
+      },
+    }),
+  });
+  const result = await res.json().catch(() => null);
+  if (!res.ok || !result?.messages?.length) {
+    console.error('whatsapp_failed', res.status, JSON.stringify(result));
+    return false;
+  }
+  return true;
+}
+
+async function sendSms(ten: string, code: string): Promise<boolean> {
+  const res = await fetch('https://www.fast2sms.com/dev/bulkV2', {
+    method: 'POST',
+    headers: { authorization: fast2smsKey!, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ route: 'otp', variables_values: code, numbers: ten, flash: 0 }),
+  });
+  const result = await res.json().catch(() => null);
+  if (!res.ok || !result?.return) {
+    console.error('fast2sms_failed', res.status, JSON.stringify(result));
+    return false;
+  }
+  return true;
+}
+
 async function sendCode(ten: string, ip: string) {
-  if (!fast2smsKey) return json({ error: 'sms_not_configured' }, 503);
+  if (!whatsappConfigured && !fast2smsKey) return json({ error: 'sms_not_configured' }, 503);
 
   const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
   const { data: existing } = await admin.from('phone_otps').select('last_sent_at').eq('phone', ten).maybeSingle();
@@ -78,15 +126,9 @@ async function sendCode(ten: string, ip: string) {
     last_sent_at: new Date().toISOString(),
   });
 
-  const res = await fetch('https://www.fast2sms.com/dev/bulkV2', {
-    method: 'POST',
-    headers: { authorization: fast2smsKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ route: 'otp', variables_values: code, numbers: ten, flash: 0 }),
-  });
-  const result = await res.json().catch(() => null);
-  if (!res.ok || !result?.return) {
+  const delivered = whatsappConfigured ? await sendWhatsApp(ten, code) : await sendSms(ten, code);
+  if (!delivered) {
     await admin.from('phone_otps').delete().eq('phone', ten);
-    console.error('fast2sms_failed', res.status, JSON.stringify(result));
     return json({ error: 'sms_failed' }, 502);
   }
 
