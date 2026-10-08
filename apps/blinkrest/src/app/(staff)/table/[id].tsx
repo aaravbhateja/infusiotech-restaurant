@@ -39,6 +39,7 @@ const STATUS_TO_FLOOR: Record<'F' | 'C' | 'R', string> = { F: 'available', R: 'r
 function TableDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { membership } = useAuth();
+  const canSeeBill = !!(membership?.permissions.has('payments.view') || membership?.permissions.has('payments.cash.collect') || membership?.permissions.has('orders.create'));
   const isOnline = useIsOnline();
   const [table, setTable] = useState<{ label: string; capacity: number | null; floor_state?: string } | null>(null);
   const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>(null);
@@ -222,7 +223,7 @@ function TableDetailScreen() {
       ? [{ label: 'Edit table', icon: 'edit' as IconName, bg: '#F7F1EC', fg: colors.ink900, go: openEditTable }]
       : []),
     { label: 'New QR', icon: 'qr', bg: '#F7F1EC', fg: colors.ink900, go: reissueQr },
-    ...(activeOrder
+    ...(activeOrder && canSeeBill
       ? [{ label: 'Bill', icon: 'printer' as IconName, bg: '#F7F1EC', fg: colors.ink900, go: () => setBillOpen(true) }]
       : []),
   ];

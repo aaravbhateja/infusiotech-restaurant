@@ -50,6 +50,8 @@ function OrderDetailScreen() {
   const isOnline = useIsOnline();
   const [order, setOrder] = useState<OrderDetailData | null>(null);
   const [billOpen, setBillOpen] = useState(false);
+  // Kitchen staff only prepare food: no bills, receipts or printing.
+  const canSeeBill = !!(membership?.permissions.has('payments.view') || membership?.permissions.has('payments.cash.collect') || membership?.permissions.has('orders.create'));
   const [discountRequest, setDiscountRequest] = useState<DiscountRequest | null>(null);
   const [requestingDiscount, setRequestingDiscount] = useState(false);
   const [discountAmount, setDiscountAmount] = useState('');
@@ -251,7 +253,7 @@ function OrderDetailScreen() {
             Payment: {order.payment_status}
           </Text>
         )}
-        <Button title="Check bill" variant="outline" onPress={() => setBillOpen(true)} />
+        {canSeeBill ? <Button title="Check bill" variant="outline" onPress={() => setBillOpen(true)} /> : null}
       </View>
     </ScrollView>
 

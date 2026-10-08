@@ -61,6 +61,8 @@ function timeAgo(iso: string) {
 
 function OrdersScreen() {
   const { membership } = useAuth();
+  // Kitchen staff only prepare food: no bills, receipts or printing.
+  const canSeeBill = !!(membership?.permissions.has('payments.view') || membership?.permissions.has('payments.cash.collect') || membership?.permissions.has('orders.create'));
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const { filter: filterParam } = useLocalSearchParams<{ filter?: string }>();
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>(FILTERS.find((f) => f === filterParam) ?? 'all');
@@ -308,7 +310,7 @@ function OrdersScreen() {
                     <Text style={{ fontSize: 15, fontFamily: fonts.bodyExtraBold, color: next.fg }}>{next.label}</Text>
                   </AnimatedPressable>
                 ) : null}
-                {closed || !next ? (
+                {(closed || !next) && canSeeBill ? (
                   <AnimatedPressable
                     onPress={() => router.push(`/(staff)/orders/${item.id}` as never)}
                     style={{ height: 44, paddingHorizontal: 16, borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.inputBorder, justifyContent: 'center' }}
