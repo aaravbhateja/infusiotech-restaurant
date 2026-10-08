@@ -288,7 +288,13 @@ export default function CashAndTables() {
               <Text style={{ fontSize: 12, fontFamily: fonts.bodyExtraBold, color: colors.ink700, letterSpacing: 0.6 }}>TABLES SERVED</Text>
               {tables.length === 0 ? <Text style={{ color: colors.ink500, fontFamily: fonts.body }}>No served tables in this period.</Text> : null}
               {tables.map((t) => {
-                const chip = t.handover_status ? HANDOVER_LABEL[t.handover_status] : null;
+                // Only cash is handed over; UPI/card go straight to the restaurant.
+                const nonCash = t.payment_method === 'upi' || t.payment_method === 'card';
+                const chip = nonCash
+                  ? { label: `${t.payment_method === 'upi' ? 'UPI' : 'Card'} collected`, bg: colors.successBg, fg: colors.success }
+                  : t.handover_status
+                    ? HANDOVER_LABEL[t.handover_status]
+                    : null;
                 return (
                   <View key={t.order_id} style={{ backgroundColor: colors.surface, borderRadius: 18, borderWidth: 1, borderColor: '#F4ECE6', padding: 14, gap: 6 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
