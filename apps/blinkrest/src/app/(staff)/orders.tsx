@@ -11,6 +11,7 @@ import { RequireAccess } from '@/components/RequireAccess';
 import { Skeleton } from '@/components/Skeleton';
 import { EmptyState, ErrorState, Snackbar } from '@/components/States';
 import { useAuth } from '@/hooks/useAuth';
+import { tenantSubs, useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 import { homePathForRole } from '@/lib/roleHome';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts, formatMinor, radius, shadow } from '@/theme/tokens';
@@ -90,21 +91,11 @@ function OrdersScreen() {
     setOrders((data as unknown as OrderRow[]) ?? []);
   }, []);
 
+  useRealtimeRefresh('ordersfeedtsx', tenantSubs(membership?.tenantId, ['orders', 'order_items', 'payments']), load);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
     load();
-    if (!membership) return;
-    const channel = supabase
-      .channel('orders-feed')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'orders', filter: `tenant_id=eq.${membership.tenantId}` },
-        () => load(),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [membership, load]);
 
   async function onRefresh() {

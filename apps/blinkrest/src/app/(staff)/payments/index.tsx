@@ -78,14 +78,6 @@ function PaymentsScreen() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
     load();
-    if (!membership) return;
-    const channel = supabase
-      .channel('payments-feed')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments', filter: `tenant_id=eq.${membership.tenantId}` }, () => load())
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [membership, load]);
 
   const todays = txns;

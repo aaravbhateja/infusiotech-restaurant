@@ -81,19 +81,11 @@ export default function KitchenHome() {
     );
   }, []);
 
-  useRealtimeRefresh('kitchenhometsx', tenantSubs(membership?.tenantId, ['order_items', 'menu_items']), load);
+  useRealtimeRefresh('kitchenhometsx', tenantSubs(membership?.tenantId, ['orders', 'order_items', 'menu_items']), load);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
     load();
-    if (!membership) return;
-    const channel = supabase
-      .channel('kitchen-orders')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `tenant_id=eq.${membership.tenantId}` }, () => load())
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [membership, load]);
 
   async function advance(t: Ticket) {

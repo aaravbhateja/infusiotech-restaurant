@@ -79,14 +79,6 @@ export default function ManagerHome() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
     load();
-    if (!membership) return;
-    const channel = supabase
-      .channel('manager-home')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `tenant_id=eq.${membership.tenantId}` }, () => load())
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [membership, load]);
 
   const kitchenLoad = orders.filter((o) => o.order_status === 'accepted' || o.order_status === 'preparing').length;

@@ -77,8 +77,6 @@ export default function WaiterHome() {
     }
   }, [membership]);
 
-  useRealtimeRefresh('waiterhometsx', tenantSubs(membership?.tenantId, ['orders', 'staff_shifts', 'restaurant_tables', 'payments', 'cash_handovers']), load);
-
   const loadShift = useCallback(async () => {
     if (!membership || !session) return;
     const startOfDay = new Date();
@@ -91,21 +89,15 @@ export default function WaiterHome() {
     setOrdersTaken(count ?? 0);
   }, [membership, session]);
 
+  useRealtimeRefresh('waiterhometsx', tenantSubs(membership?.tenantId, ['orders', 'staff_shifts', 'restaurant_tables', 'payments', 'cash_handovers']), () => {
+    load();
+    loadShift();
+  });
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
     load();
     loadShift();
-    if (!membership) return;
-    const channel = supabase
-      .channel('waiter-orders')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `tenant_id=eq.${membership.tenantId}` }, () => {
-        load();
-        loadShift();
-      })
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [membership, load, loadShift]);
 
   useEffect(() => {

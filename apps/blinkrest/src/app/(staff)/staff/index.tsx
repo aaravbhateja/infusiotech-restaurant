@@ -7,6 +7,7 @@ import { Icon } from '@/components/Icon';
 import { RequireAccess } from '@/components/RequireAccess';
 import { ConfirmDialog } from '@/components/States';
 import { useAuth } from '@/hooks/useAuth';
+import { tenantSubs, useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 import { useIsOnline } from '@/hooks/useIsOnline';
 import { guardOnline } from '@/lib/offline';
 import { supabase } from '@/lib/supabase';
@@ -72,18 +73,11 @@ function StaffScreen() {
     );
   }, [membership]);
 
+  useRealtimeRefresh('stafflisttsx', tenantSubs(membership?.tenantId, ['tenant_memberships', 'staff_invitations']), load);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
     load();
-    if (!membership) return;
-    const channel = supabase
-      .channel('staff-list')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tenant_memberships', filter: `tenant_id=eq.${membership.tenantId}` }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'staff_invitations', filter: `tenant_id=eq.${membership.tenantId}` }, () => load())
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [membership, load]);
 
   const [revoking, setRevoking] = useState<Invite | null>(null);

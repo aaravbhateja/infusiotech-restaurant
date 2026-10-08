@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon, type IconName } from '@/components/Icon';
 import { useAuth } from '@/hooks/useAuth';
+import { tenantSubs, useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts, radius } from '@/theme/tokens';
 
@@ -53,17 +54,11 @@ export default function Notifications() {
     setItems((notifs ?? []).map((n) => ({ ...n, icon: n.icon as IconName, read: readSet.has(n.id) })));
   }, [membership]);
 
+  useRealtimeRefresh('notificationsfeedtsx', tenantSubs(membership?.tenantId, ['notifications', 'notification_reads']), load);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
     load();
-    if (!membership) return;
-    const channel = supabase
-      .channel('notifications-feed')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `tenant_id=eq.${membership.tenantId}` }, () => load())
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [membership, load]);
 
   const unreadCount = items.filter((n) => !n.read).length;

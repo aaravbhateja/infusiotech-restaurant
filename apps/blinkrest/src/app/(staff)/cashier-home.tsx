@@ -93,19 +93,11 @@ export default function CashierHome() {
     setLoading(false);
   }, [membership]);
 
-  useRealtimeRefresh('cashierhometsx', tenantSubs(membership?.tenantId, ['payments', 'staff_shifts', 'cash_handovers']), load);
+  useRealtimeRefresh('cashierhometsx', tenantSubs(membership?.tenantId, ['orders', 'order_items', 'payments', 'staff_shifts', 'cash_handovers']), load);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
     load();
-    if (!membership) return;
-    const channel = supabase
-      .channel('cashier-bills')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `tenant_id=eq.${membership.tenantId}` }, () => load())
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [membership, load]);
 
   async function collect(bill: Bill, method: 'cash' | 'upi' | 'card') {
