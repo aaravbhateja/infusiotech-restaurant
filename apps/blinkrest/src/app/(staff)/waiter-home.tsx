@@ -24,6 +24,8 @@ type OrderRow = {
   table: { label: string } | null;
 };
 
+type ToCollect = { id: string; order_number: string; total_minor: number; table: { label: string } | null };
+
 const STATUS_META: Record<string, { label: string; icon: 'bolt' | 'flame' | 'bell' | 'timer'; bg: string; fg: string }> = {
   new: { label: 'New order', icon: 'bolt', bg: colors.coral50, fg: colors.coral700 },
   accepted: { label: 'Accepted', icon: 'flame', bg: '#EAF1FF', fg: '#1F5BD6' },
@@ -46,6 +48,8 @@ export default function WaiterHome() {
   const [shiftStartedAt, setShiftStartedAt] = useState<string | null>(null);
   const [shiftBusy, setShiftBusy] = useState(false);
   const [ordersTaken, setOrdersTaken] = useState(0);
+  const [toCollect, setToCollect] = useState<ToCollect[]>([]);
+  const [heldMinor, setHeldMinor] = useState(0);
   const [now, setNow] = useState(() => Date.now());
 
   const load = useCallback(async () => {
@@ -56,9 +60,24 @@ export default function WaiterHome() {
       .not('table_id', 'is', null)
       .order('created_at', { ascending: false });
     setOrders((data as unknown as OrderRow[]) ?? []);
-  }, []);
 
-  useRealtimeRefresh('waiterhometsx', tenantSubs(membership?.tenantId, ['orders', 'staff_shifts', 'restaurant_tables']), load);
+    if (membership) {
+      const [{ data: unpaid }, { data: held }] = await Promise.all([
+        supabase
+          .from('orders')
+          .select('id, order_number, total_minor, table:restaurant_tables(label)')
+          .eq('served_by', membership.id)
+          .eq('order_status', 'served')
+          .eq('payment_status', 'unpaid')
+          .order('served_at', { ascending: false }),
+        supabase.from('payments').select('amount_minor').eq('collected_by', membership.id).eq('via_waiter', true).is('handover_id', null).eq('status', 'cash_received'),
+      ]);
+      setToCollect((unpaid as unknown as ToCollect[]) ?? []);
+      setHeldMinor((held ?? []).reduce((sum, p) => sum + p.amount_minor, 0));
+    }
+  }, [membership]);
+
+  useRealtimeRefresh('waiterhometsx', tenantSubs(membership?.tenantId, ['orders', 'staff_shifts', 'restaurant_tables', 'payments', 'cash_handovers']), load);
 
   const loadShift = useCallback(async () => {
     if (!membership || !session) return;
@@ -114,6 +133,21 @@ export default function WaiterHome() {
       Alert.alert('Could not update order', error.message);
       await load();
     }
+  }
+
+  async function collectCash(o: ToCollect) {
+    if (!guardOnline(isOnline)) return;
+    Alert.alert(`Collect ${formatMinor(o.total_minor)} cash?`, `${o.table?.label ?? 'Order'} · #${o.order_number}. Confirm you have received the cash from the guest.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Cash received',
+        onPress: async () => {
+          const { error } = await supabase.rpc('record_cash_payment', { p_order_id: o.id, p_method: 'cash' });
+          if (error) Alert.alert('Could not record payment', error.message);
+          load();
+        },
+      },
+    ]);
   }
 
   if (membership && membership.roleName !== 'Waiter') return <Redirect href={homePathForRole(membership.roleName)} />;
@@ -181,6 +215,31 @@ export default function WaiterHome() {
               <Text style={{ fontFamily: fonts.bodyExtraBold, color: colors.success }}>Mark served</Text>
             </Pressable>
           </Animated.View>
+        ) : null}
+
+        {membership?.permissions.has('payments.cash.collect') ? (
+          <View style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: '#F4ECE6', borderRadius: 22, padding: 14, gap: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 12, fontFamily: fonts.bodyExtraBold, color: colors.ink700, letterSpacing: 0.6 }}>CASH IN MY HAND</Text>
+                <Text style={{ fontSize: 24, fontFamily: fonts.display, color: heldMinor > 0 ? colors.warning : colors.ink900 }}>{formatMinor(heldMinor)}</Text>
+              </View>
+              <Pressable onPress={() => router.push('/(staff)/cash' as never)} style={{ height: 40, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: colors.ink900, justifyContent: 'center' }}>
+                <Text style={{ fontFamily: fonts.bodyExtraBold, color: '#FFFFFF', fontSize: 13 }}>{heldMinor > 0 ? 'Hand over' : 'My cash'}</Text>
+              </Pressable>
+            </View>
+            {toCollect.map((o) => (
+              <View key={o.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: 1, borderTopColor: '#F4ECE6', paddingTop: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>{o.table?.label ?? 'Order'} · #{o.order_number}</Text>
+                  <Text style={{ fontSize: 12, color: colors.ink500 }}>Served by you · unpaid</Text>
+                </View>
+                <Pressable onPress={() => collectCash(o)} style={{ height: 40, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: colors.success, justifyContent: 'center' }}>
+                  <Text style={{ fontFamily: fonts.bodyExtraBold, color: '#FFFFFF', fontSize: 13 }}>Collect {formatMinor(o.total_minor)}</Text>
+                </Pressable>
+              </View>
+            ))}
+          </View>
         ) : null}
 
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>

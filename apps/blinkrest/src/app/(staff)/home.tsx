@@ -539,9 +539,14 @@ export default function Home() {
           <View style={{ backgroundColor: colors.surface, borderRadius: 24, borderWidth: 1, borderColor: '#F4ECE6', padding: 18, gap: 12 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
               <Text style={{ fontSize: 17, fontFamily: fonts.display, color: colors.ink900 }}>Payment breakdown</Text>
-              <Pressable onPress={() => router.push('/(staff)/payments' as never)}>
-                <Text style={{ fontSize: 12, fontFamily: fonts.bodyExtraBold, color: colors.coral600 }}>Payments</Text>
-              </Pressable>
+              <View style={{ flexDirection: 'row', gap: 14 }}>
+                <Pressable onPress={() => router.push('/(staff)/cash' as never)}>
+                  <Text style={{ fontSize: 12, fontFamily: fonts.bodyExtraBold, color: colors.coral600 }}>Waiter cash</Text>
+                </Pressable>
+                <Pressable onPress={() => router.push('/(staff)/payments' as never)}>
+                  <Text style={{ fontSize: 12, fontFamily: fonts.bodyExtraBold, color: colors.coral600 }}>Payments</Text>
+                </Pressable>
+              </View>
             </View>
             <View style={{ flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', gap: 2 }}>
               {pay.slice(0, 4).map((p, i) => (

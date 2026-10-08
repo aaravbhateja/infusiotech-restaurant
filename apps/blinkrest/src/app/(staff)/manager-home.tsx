@@ -159,11 +159,12 @@ export default function ManagerHome() {
             ['Staff', 'users', '/(staff)/staff', '#F1EBFF', '#5B21B6'],
             ['Analytics', 'chart', '/(staff)/analytics', colors.successBg, colors.success],
             ['Offers', 'percent', '/(staff)/offers', colors.saffron50, '#8A5A00'],
+            ['Cash', 'cash', '/(staff)/cash', colors.infoBg, colors.info],
           ] as const).map(([label, icon, href, bg, fg]) => (
             <Pressable
               key={label}
               onPress={() => router.push(href as never)}
-              style={{ width: '22.5%', aspectRatio: 1, backgroundColor: colors.surface, borderWidth: 1, borderColor: '#F4ECE6', borderRadius: 18, alignItems: 'center', justifyContent: 'center', gap: 6 }}
+              style={{ width: '18%', flexGrow: 1, aspectRatio: 1, backgroundColor: colors.surface, borderWidth: 1, borderColor: '#F4ECE6', borderRadius: 18, alignItems: 'center', justifyContent: 'center', gap: 6 }}
             >
               <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}>
                 <Icon name={icon} size={18} stroke={2.1} color={fg} />

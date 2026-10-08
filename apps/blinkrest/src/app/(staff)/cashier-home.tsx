@@ -49,6 +49,7 @@ export default function CashierHome() {
   const [bills, setBills] = useState<Bill[]>([]);
   const [shift, setShift] = useState<Shift | null>(null);
   const [cashCollected, setCashCollected] = useState(0);
+  const [pendingHandovers, setPendingHandovers] = useState(0);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [floatOpen, setFloatOpen] = useState(false);
@@ -78,12 +79,21 @@ export default function CashierHome() {
     setShift(shiftRow as Shift | null);
 
     const since = shiftRow?.started_at ?? new Date(new Date().setHours(0, 0, 0, 0)).toISOString();
-    const { data: payments } = await supabase.from('payments').select('amount_minor').eq('status', 'cash_received').eq('method', 'cash').gte('created_at', since);
-    setCashCollected((payments ?? []).reduce((s, p) => s + p.amount_minor, 0));
+    // Counter cash plus waiter cash the cashier has confirmed receiving; cash
+    // still in a waiter's pocket is not in the drawer yet.
+    const [{ data: payments }, { data: handovers }, { count: pending }] = await Promise.all([
+      supabase.from('payments').select('amount_minor').eq('status', 'cash_received').eq('method', 'cash').eq('via_waiter', false).gte('created_at', since),
+      supabase.from('cash_handovers').select('received_amount_minor').eq('status', 'confirmed').gte('confirmed_at', since),
+      supabase.from('cash_handovers').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+    ]);
+    setCashCollected(
+      (payments ?? []).reduce((s, p) => s + p.amount_minor, 0) + (handovers ?? []).reduce((s, h) => s + (h.received_amount_minor ?? 0), 0),
+    );
+    setPendingHandovers(pending ?? 0);
     setLoading(false);
   }, [membership]);
 
-  useRealtimeRefresh('cashierhometsx', tenantSubs(membership?.tenantId, ['payments', 'staff_shifts']), load);
+  useRealtimeRefresh('cashierhometsx', tenantSubs(membership?.tenantId, ['payments', 'staff_shifts', 'cash_handovers']), load);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
@@ -300,6 +310,20 @@ export default function CashierHome() {
             </Text>
           </View>
         </View>
+
+        <Pressable
+          onPress={() => router.push('/(staff)/cash' as never)}
+          style={{ backgroundColor: pendingHandovers > 0 ? colors.saffron50 : colors.surface, borderWidth: pendingHandovers > 0 ? 2 : 1, borderColor: pendingHandovers > 0 ? colors.saffron400 : '#F4ECE6', borderRadius: 18, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10 }}
+        >
+          <Icon name="cash" size={20} color={colors.ink900} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 14, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>
+              {pendingHandovers > 0 ? `${pendingHandovers} waiter handover${pendingHandovers === 1 ? '' : 's'} to confirm` : 'Waiter cash & tables'}
+            </Text>
+            <Text style={{ fontSize: 12, color: colors.ink700 }}>See which waiter served and collected from each table</Text>
+          </View>
+          <Icon name="right" size={18} color={colors.ink700} />
+        </Pressable>
 
         <View style={{ flexDirection: 'row', backgroundColor: '#F7F1EC', borderRadius: radius.pill, padding: 4 }}>
           {([
