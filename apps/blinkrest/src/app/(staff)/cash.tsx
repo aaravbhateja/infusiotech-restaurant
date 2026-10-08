@@ -78,6 +78,7 @@ export default function CashAndTables() {
   const [waiters, setWaiters] = useState<WaiterRow[]>([]);
   const [tables, setTables] = useState<TableRow[]>([]);
   const [handovers, setHandovers] = useState<Handover[]>([]);
+  const [counter, setCounter] = useState<{ method: string; amount_minor: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState<Handover | null>(null);
@@ -89,7 +90,7 @@ export default function CashAndTables() {
 
   const load = useCallback(async () => {
     const since = sinceFor(period);
-    const [w, t, h] = await Promise.all([
+    const [w, t, h, c] = await Promise.all([
       supabase.rpc('waiter_cash_summary', { p_from: since }),
       supabase.rpc('table_service_report', { p_from: since }),
       supabase
@@ -97,10 +98,13 @@ export default function CashAndTables() {
         .select('id, waiter_membership_id, amount_minor, received_amount_minor, status, submitted_at, confirmed_at')
         .gte('submitted_at', since)
         .order('submitted_at', { ascending: false }),
+      // Payments the cashier took at the counter (not via a waiter).
+      supabase.from('payments').select('method, amount_minor').eq('via_waiter', false).not('collected_by', 'is', null).in('status', ['cash_received', 'reconciled']).gte('created_at', since),
     ]);
     setWaiters((w.data as WaiterRow[]) ?? []);
     setTables((t.data as TableRow[]) ?? []);
     setHandovers((h.data as unknown as Handover[]) ?? []);
+    setCounter((c.data as { method: string; amount_minor: number }[]) ?? []);
     setLoading(false);
   }, [period]);
 
@@ -188,7 +192,7 @@ export default function CashAndTables() {
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
               {seesAll ? (
                 <>
-                  {stat('Total collected (cash, UPI, card)', totals.collected)}
+                  {stat('Collected by waiters (cash, UPI, card)', totals.collected)}
                   {stat('Still with waiters', totals.held, totals.held > 0 ? colors.warning : colors.ink900)}
                   {stat('Awaiting cashier', totals.pending, colors.info)}
                   {stat('Received by cashier', totals.confirmed, colors.success)}
@@ -260,6 +264,23 @@ export default function CashAndTables() {
                     </Text>
                   </View>
                 ))}
+              </View>
+            ) : null}
+
+            {seesAll ? (
+              <View style={{ gap: 8 }}>
+                <Text style={{ fontSize: 12, fontFamily: fonts.bodyExtraBold, color: colors.ink700, letterSpacing: 0.6 }}>COLLECTED AT THE COUNTER</Text>
+                <View style={{ backgroundColor: colors.surface, borderRadius: 18, borderWidth: 1, borderColor: '#F4ECE6', padding: 14, gap: 6 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={{ flex: 1, fontSize: 15, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>Cashier (counter)</Text>
+                    <Text style={{ fontSize: 18, fontFamily: fonts.display, color: colors.ink900 }}>{formatMinor(counter.reduce((a, r) => a + r.amount_minor, 0))}</Text>
+                  </View>
+                  <Text style={{ fontSize: 12, fontFamily: fonts.bodyBold, color: colors.ink700 }}>
+                    {(['cash', 'upi', 'card'] as const)
+                      .map((m) => `${m.toUpperCase()} ${formatMinor(counter.filter((r) => r.method === m).reduce((a, r) => a + r.amount_minor, 0))}`)
+                      .join(' · ')}
+                  </Text>
+                </View>
               </View>
             ) : null}
 
