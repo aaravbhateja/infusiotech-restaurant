@@ -188,7 +188,7 @@ export default function CashAndTables() {
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
               {seesAll ? (
                 <>
-                  {stat('Cash collected by waiters & cashier', totals.collected)}
+                  {stat('Total collected (cash, UPI, card)', totals.collected)}
                   {stat('Still with waiters', totals.held, totals.held > 0 ? colors.warning : colors.ink900)}
                   {stat('Awaiting cashier', totals.pending, colors.info)}
                   {stat('Received by cashier', totals.confirmed, colors.success)}
@@ -196,7 +196,7 @@ export default function CashAndTables() {
                 </>
               ) : (
                 <>
-                  {stat('Collected', mine?.collected_minor ?? 0)}
+                  {stat('Total collected (cash, UPI, card)', mine?.collected_minor ?? 0)}
                   {stat('In my hand', mine?.held_by_waiter_minor ?? 0, colors.warning)}
                   {stat('Awaiting cashier', mine?.pending_handover_minor ?? 0, colors.info)}
                   {stat('Cashier received', mine?.confirmed_minor ?? 0, colors.success)}
