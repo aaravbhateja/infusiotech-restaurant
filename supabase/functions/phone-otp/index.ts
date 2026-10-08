@@ -126,7 +126,11 @@ async function sendCode(ten: string, ip: string) {
     last_sent_at: new Date().toISOString(),
   });
 
-  const delivered = whatsappConfigured ? await sendWhatsApp(ten, code) : await sendSms(ten, code);
+  // WhatsApp first; if Meta rejects it (number not on WhatsApp, template or
+  // account problem, outage) fall back to SMS so the user is never locked out.
+  const delivered = whatsappConfigured
+    ? (await sendWhatsApp(ten, code)) || (fast2smsKey ? await sendSms(ten, code) : false)
+    : await sendSms(ten, code);
   if (!delivered) {
     await admin.from('phone_otps').delete().eq('phone', ten);
     return json({ error: 'sms_failed' }, 502);
