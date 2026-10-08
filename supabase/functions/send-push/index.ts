@@ -24,9 +24,19 @@ Deno.serve(async (req) => {
   }
 
   const admin = createClient(supabaseUrl, serviceRoleKey);
-  const { data: tokens } = await admin.from('device_push_tokens').select('expo_push_token').eq('tenant_id', body.tenant_id);
+  // Only devices whose signed-in member has a role in the notification's audience.
+  const { data: rows } = await admin
+    .from('device_push_tokens')
+    .select('expo_push_token, membership:tenant_memberships!inner(status, role:roles(name))')
+    .eq('tenant_id', body.tenant_id);
+  const audience: string[] | null = Array.isArray(body.audience_roles) ? body.audience_roles : null;
+  const tokens = (rows ?? []).filter((r) => {
+    const m = r.membership as unknown as { status: string; role: { name: string } | null };
+    if (m?.status !== 'active') return false;
+    return audience === null || (m.role?.name !== undefined && audience.includes(m.role.name));
+  });
 
-  if (!tokens || tokens.length === 0) {
+  if (tokens.length === 0) {
     return new Response(JSON.stringify({ ok: true, sent: 0 }), { headers: { 'Content-Type': 'application/json' } });
   }
 
