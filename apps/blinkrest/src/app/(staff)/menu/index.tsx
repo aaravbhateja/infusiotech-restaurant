@@ -7,6 +7,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { BottomNav } from '@/components/BottomNav';
 import { Icon } from '@/components/Icon';
+import { MenuCsvSheet } from '@/components/MenuCsvSheet';
 import { RequireAccess } from '@/components/RequireAccess';
 import { MenuItemSkeleton } from '@/components/Skeleton';
 import { EmptyState } from '@/components/States';
@@ -38,6 +39,7 @@ function MenuScreen() {
   const [items, setItems] = useState<MenuItem[]>([]);
   const [activeCategory, setActiveCategory] = useState('All');
   const [query, setQuery] = useState('');
+  const [csvOpen, setCsvOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -95,6 +97,7 @@ function MenuScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.bg }}>
+      <MenuCsvSheet visible={csvOpen} onClose={() => setCsvOpen(false)} onImported={load} />
       <View style={{ paddingHorizontal: 20, paddingTop: 12, gap: 6 }}>
         <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
           <View style={{ flex: 1 }}>
@@ -103,6 +106,14 @@ function MenuScreen() {
               {items.length} items · {categories.length} categories
             </Text>
           </View>
+          {membership.permissions.has('menu.edit') ? (
+            <Pressable
+              onPress={() => setCsvOpen(true)}
+              style={{ height: 40, paddingHorizontal: 14, borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.line, justifyContent: 'center', marginRight: 8 }}
+            >
+              <Text style={{ fontSize: 13, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>CSV</Text>
+            </Pressable>
+          ) : null}
           <Pressable
             onPress={() => router.push('/(staff)/preview/menu' as never)}
             style={{ height: 40, paddingHorizontal: 14, borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', gap: 6 }}

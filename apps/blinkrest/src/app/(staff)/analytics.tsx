@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, Share, Text, View, useWindowDimensions } from 'react-native';
+import { Alert, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
@@ -9,6 +9,7 @@ import { RequireAccess } from '@/components/RequireAccess';
 import { Skeleton } from '@/components/Skeleton';
 import { EmptyState, ErrorState } from '@/components/States';
 import { useAuth } from '@/hooks/useAuth';
+import { shareCsv } from '@/lib/csv';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts, formatMinor, radius } from '@/theme/tokens';
 import { tenantSubs, useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
@@ -188,24 +189,23 @@ function AnalyticsScreen() {
     return { revenue, count, avg, net, guests, revenueBuckets, prevBuckets, countBuckets, labelFor, categories, catTotal, best, methodList, methodTotal, grid, gridMax, completed, cancelled, rejected, deltaRevenue: delta(revenue, prevRevenue), deltaCount: delta(count, prevCount), deltaAvg: delta(avg, prevAvg), hasData: current.length > 0 };
   }, [current, previous, payments, range]);
 
+  // Order-level CSV for the selected period (Excel / accountant friendly).
   async function exportReport() {
-    const lines = [
-      `${membership?.tenantName} — analytics (${range.label})`,
-      `Revenue: ${formatMinor(stats.revenue)}`,
-      `Orders: ${stats.count}`,
-      `Average order value: ${formatMinor(stats.avg)}`,
-      `Net sales (excl. tax): ${formatMinor(stats.net)}`,
-      '',
-      'Sales by category',
-      ...stats.categories.map(([n, v]) => `${n},${formatMinor(v)}`),
-      '',
-      'Best-selling items',
-      ...stats.best.map(([n, v]) => `${n},${v.qty} sold,${formatMinor(v.total)}`),
-      '',
-      'Payment methods',
-      ...stats.methodList.map(([m, v]) => `${METHOD_LABEL[m] ?? m},${formatMinor(v)}`),
-    ];
-    await Share.share({ message: lines.join('\n') });
+    const end = startOfToday() + DAY_MS - range.offset * DAY_MS;
+    const start = end - range.days * DAY_MS;
+    const { data, error } = await supabase.rpc('export_orders_csv', {
+      p_from: new Date(start).toISOString(),
+      p_to: new Date(end).toISOString(),
+    });
+    if (error) {
+      Alert.alert('Could not export', error.message);
+      return;
+    }
+    try {
+      await shareCsv(`blinkrest-sales-${new Date(start).toISOString().slice(0, 10)}-to-${new Date(end - 1).toISOString().slice(0, 10)}.csv`, data as string, 'Sales report');
+    } catch (e) {
+      Alert.alert('Could not share', e instanceof Error ? e.message : 'Please try again.');
+    }
   }
 
   const maxRev = Math.max(1, ...stats.revenueBuckets, ...stats.prevBuckets);
