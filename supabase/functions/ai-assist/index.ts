@@ -19,7 +19,7 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 const groqKey = Deno.env.get('GROQ_API_KEY');
 const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
-const GROQ_MODEL = Deno.env.get('GROQ_MODEL') ?? 'llama-3.3-70b-versatile';
+const GROQ_MODEL = Deno.env.get('GROQ_MODEL') ?? 'openai/gpt-oss-120b';
 const ANTHROPIC_MODEL = Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-haiku-4-5-20251001';
 
 const json = (body: unknown, status = 200) =>
@@ -34,7 +34,8 @@ async function callModel(system: string, user: string, maxTokens: number, asJson
       headers: { Authorization: `Bearer ${groqKey}`, 'content-type': 'application/json' },
       body: JSON.stringify({
         model: GROQ_MODEL,
-        max_tokens: maxTokens,
+        max_tokens: maxTokens + 1500, // reasoning tokens count against the limit
+        reasoning_effort: 'low',
         temperature: 0.4,
         ...(asJson ? { response_format: { type: 'json_object' } } : {}),
         messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
