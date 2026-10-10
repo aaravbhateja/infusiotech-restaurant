@@ -1,6 +1,6 @@
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, ScrollView, Text, TextInput, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BillPreviewSheet } from '@/components/BillPreviewSheet';
@@ -22,6 +22,9 @@ type OrderItem = {
   line_total_minor: number;
   variant_snapshot: { name: string }[];
   addon_snapshot: { name: string }[];
+  voided_at: string | null;
+  void_reason: string | null;
+  added_after_kot: boolean;
 };
 
 type OrderDetailData = {
@@ -51,6 +54,9 @@ function OrderDetailScreen() {
   const isOnline = useIsOnline();
   const [order, setOrder] = useState<OrderDetailData | null>(null);
   const [billOpen, setBillOpen] = useState(false);
+  const [voiding, setVoiding] = useState<OrderItem | null>(null);
+  const [voidReason, setVoidReason] = useState('');
+  const [voidBusy, setVoidBusy] = useState(false);
   // Kitchen staff only prepare food: no bills, receipts or printing.
   const canSeeBill = !!(membership?.permissions.has('payments.view') || membership?.permissions.has('payments.cash.collect') || membership?.permissions.has('orders.create'));
   const [discountRequest, setDiscountRequest] = useState<DiscountRequest | null>(null);
@@ -63,7 +69,7 @@ function OrderDetailScreen() {
     const { data } = await supabase
       .from('orders')
       .select(
-        'id, order_number, order_status, payment_status, total_minor, currency, created_at, table:restaurant_tables(label), items:order_items(id, item_name_snapshot, quantity, line_total_minor, variant_snapshot, addon_snapshot)',
+        'id, order_number, order_status, payment_status, total_minor, currency, created_at, table:restaurant_tables(label), items:order_items(id, item_name_snapshot, quantity, line_total_minor, variant_snapshot, addon_snapshot, voided_at, void_reason, added_after_kot)',
       )
       .eq('id', id)
       .single();
@@ -145,6 +151,30 @@ function OrderDetailScreen() {
   const nextStep = NEXT_STEP[order.order_status];
   const next = nextStep && (membership?.permissions.has(nextStep.permission) || membership?.permissions.has('orders.status.update')) ? nextStep : undefined;
 
+  async function submitVoid() {
+    if (!voiding) return;
+    if (voidReason.trim().length === 0) {
+      Alert.alert('Reason needed', 'Say why this item is being removed.');
+      return;
+    }
+    if (!guardOnline(isOnline)) return;
+    setVoidBusy(true);
+    const { data, error } = await supabase.rpc('void_order_item', { p_item_id: voiding.id, p_reason: voidReason.trim() });
+    setVoidBusy(false);
+    if (error) {
+      Alert.alert('Could not void item', error.message === 'request_already_pending' ? 'A request for this item is already waiting for approval.' : error.message);
+      return;
+    }
+    setVoiding(null);
+    setVoidReason('');
+    if ((data as { status?: string } | null)?.status === 'pending_approval') {
+      Alert.alert('Sent for approval', 'A manager has to approve removing this item.');
+    }
+    load();
+  }
+
+  const canEditItems = !!order && membership?.permissions.has('orders.edit') && !['rejected', 'cancelled'].includes(order.order_status) && ['unpaid', 'pending'].includes(order.payment_status);
+
   return (
     <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: colors.bg }}>
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: 24, gap: 20 }}>
@@ -168,23 +198,35 @@ function OrderDetailScreen() {
       </View>
 
       <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, padding: 16, gap: 12, borderWidth: 1, borderColor: colors.line }}>
-        {order.items.map((item) => (
-          <View key={item.id} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: fonts.bodyBold, color: colors.ink900 }}>
-                {item.quantity}× {item.item_name_snapshot}
-              </Text>
-              {[...item.variant_snapshot, ...item.addon_snapshot].map((v, i) => (
-                <Text key={i} style={{ fontSize: 12, color: colors.ink500, fontFamily: fonts.body }}>
-                  {v.name}
+        {order.items.map((item) => {
+          const voided = !!item.voided_at;
+          return (
+            <View key={item.id} style={{ gap: 6 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: fonts.bodyBold, color: voided ? colors.ink500 : colors.ink900, textDecorationLine: voided ? 'line-through' : 'none' }}>
+                    {item.quantity}× {item.item_name_snapshot}
+                    {item.added_after_kot && !voided ? '  · ADDED' : ''}
+                  </Text>
+                  {[...item.variant_snapshot, ...item.addon_snapshot].map((v, i) => (
+                    <Text key={i} style={{ fontSize: 12, color: colors.ink500, fontFamily: fonts.body }}>
+                      {v.name}
+                    </Text>
+                  ))}
+                  {voided ? <Text style={{ fontSize: 12, color: colors.error, fontFamily: fonts.bodyBold }}>Voided: {item.void_reason}</Text> : null}
+                </View>
+                <Text style={{ fontFamily: fonts.bodyBold, color: voided ? colors.ink500 : colors.ink900, textDecorationLine: voided ? 'line-through' : 'none' }}>
+                  {formatMinor(item.line_total_minor, order.currency)}
                 </Text>
-              ))}
+              </View>
+              {canEditItems && !voided ? (
+                <Pressable onPress={() => { setVoidReason(''); setVoiding(item); }} style={{ alignSelf: 'flex-start' }}>
+                  <Text style={{ fontSize: 12, fontFamily: fonts.bodyExtraBold, color: colors.error }}>Remove item</Text>
+                </Pressable>
+              ) : null}
             </View>
-            <Text style={{ fontFamily: fonts.bodyBold, color: colors.ink900 }}>
-              {formatMinor(item.line_total_minor, order.currency)}
-            </Text>
-          </View>
-        ))}
+          );
+        })}
         <View style={{ height: 1, backgroundColor: colors.line }} />
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <Text style={{ fontFamily: fonts.display, fontSize: 18, color: colors.ink900 }}>Total</Text>
@@ -254,9 +296,44 @@ function OrderDetailScreen() {
             Payment: {order.payment_status}
           </Text>
         )}
+        {canEditItems ? <Button title="Add items" variant="outline" onPress={() => router.push(`/(staff)/orders/new?orderId=${order.id}` as never)} /> : null}
         {canSeeBill ? <Button title="Check bill" variant="outline" onPress={() => setBillOpen(true)} /> : null}
       </View>
     </ScrollView>
+
+    <Modal visible={voiding !== null} transparent animationType="fade" onRequestClose={() => setVoiding(null)}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <View style={{ width: '100%', maxWidth: 380, backgroundColor: colors.surface, borderRadius: 24, padding: 20, gap: 12 }}>
+          <Text style={{ fontSize: 18, fontFamily: fonts.display, color: colors.ink900 }}>Remove item</Text>
+          <Text style={{ fontSize: 13, color: colors.ink700 }}>
+            {voiding ? `${voiding.quantity}× ${voiding.item_name_snapshot}. ` : ''}
+            {membership?.permissions.has('orders.void') ? 'The kitchen is told right away.' : 'A manager has to approve this.'}
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+            {['Customer changed mind', 'Wrong item', 'Out of stock', 'Long wait'].map((reason) => (
+              <Pressable key={reason} onPress={() => setVoidReason(reason)} style={{ height: 34, paddingHorizontal: 12, borderRadius: radius.pill, backgroundColor: voidReason === reason ? colors.ink900 : colors.bg, justifyContent: 'center' }}>
+                <Text style={{ fontSize: 12, fontFamily: fonts.bodyBold, color: voidReason === reason ? '#FFFFFF' : colors.ink900 }}>{reason}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <TextInput
+            value={voidReason}
+            onChangeText={setVoidReason}
+            placeholder="Reason"
+            placeholderTextColor={colors.ink500}
+            style={{ height: 48, borderRadius: 14, borderWidth: 1.5, borderColor: colors.inputBorder, paddingHorizontal: 14, color: colors.ink900 }}
+          />
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Pressable onPress={() => setVoiding(null)} style={{ flex: 1, height: 46, borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.inputBorder, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>Cancel</Text>
+            </Pressable>
+            <Pressable disabled={voidBusy} onPress={submitVoid} style={{ flex: 1, height: 46, borderRadius: radius.pill, backgroundColor: colors.error, alignItems: 'center', justifyContent: 'center', opacity: voidBusy ? 0.6 : 1 }}>
+              <Text style={{ fontFamily: fonts.bodyExtraBold, color: '#FFFFFF' }}>{voidBusy ? 'Please wait…' : 'Remove'}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
 
     {billOpen ? (
       <BillPreviewSheet
@@ -264,7 +341,7 @@ function OrderDetailScreen() {
           orderNumber: order.order_number,
           createdAt: order.created_at,
           tableLabel: order.table?.label ?? null,
-          items: order.items.map((i) => ({ name: i.item_name_snapshot, quantity: i.quantity, lineTotalMinor: i.line_total_minor })),
+          items: order.items.filter((i) => !i.voided_at).map((i) => ({ name: i.item_name_snapshot, quantity: i.quantity, lineTotalMinor: i.line_total_minor })),
           totalMinor: order.total_minor,
         }}
         onClose={() => setBillOpen(false)}

@@ -27,7 +27,7 @@ function PulsingDot() {
   return <Animated.View style={[{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#FFFFFF' }, style]} />;
 }
 
-type Item = { item_name_snapshot: string; quantity: number; station: string };
+type Item = { item_name_snapshot: string; quantity: number; station: string; voided: boolean; added: boolean };
 type Ticket = {
   id: string;
   order_number: string;
@@ -35,6 +35,7 @@ type Ticket = {
   created_at: string;
   round_started_at: string;
   current_round: number;
+  kot_revision: number;
   table: { label: string } | null;
   items: Item[];
 };
@@ -60,7 +61,7 @@ export default function KitchenHome() {
   const load = useCallback(async () => {
     const { data: orders } = await supabase
       .from('orders')
-      .select('id, order_number, order_status, created_at, round_started_at, current_round, table:restaurant_tables(label)')
+      .select('id, order_number, order_status, created_at, round_started_at, current_round, kot_revision, table:restaurant_tables(label)')
       .in('order_status', ['accepted', 'preparing'])
       .order('created_at');
     const list = (orders as unknown as Omit<Ticket, 'items'>[]) ?? [];
@@ -72,13 +73,13 @@ export default function KitchenHome() {
       setTickets([]);
       return;
     }
-    const { data: items } = await supabase.from('order_items').select('order_id, round, item_name_snapshot, quantity, menu_item:menu_items(station)').in('order_id', list.map((o) => o.id));
+    const { data: items } = await supabase.from('order_items').select('order_id, round, item_name_snapshot, quantity, voided_at, added_after_kot, menu_item:menu_items(station)').in('order_id', list.map((o) => o.id));
     setTickets(
       list.map((o) => ({
         ...o,
         items: (items ?? [])
           .filter((i) => i.order_id === o.id && i.round === o.current_round)
-          .map((i) => ({ item_name_snapshot: i.item_name_snapshot, quantity: i.quantity, station: (i.menu_item as any)?.station ?? 'general' })),
+          .map((i) => ({ item_name_snapshot: i.item_name_snapshot, quantity: i.quantity, station: (i.menu_item as any)?.station ?? 'general', voided: !!i.voided_at, added: !!i.added_after_kot })),
       })),
     );
   }, []);
@@ -183,6 +184,7 @@ export default function KitchenHome() {
                 <Text style={{ fontSize: 14, fontFamily: fonts.bodyExtraBold, color: colors.ink900, flex: 1 }}>
                   {t.table?.label ?? 'Takeaway'}
                   {t.current_round > 1 ? '  ·  ADDED ITEMS' : ''}
+                  {t.kot_revision > 0 && t.current_round === 1 ? '  ·  REVISED' : ''}
                 </Text>
                 <View style={{ height: 30, paddingHorizontal: 10, borderRadius: radius.pill, backgroundColor: 'rgba(255,255,255,0.92)', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <Icon name="clock" size={15} stroke={2.4} color={colors.ink900} />
@@ -191,11 +193,18 @@ export default function KitchenHome() {
               </View>
               <View style={{ padding: 14, gap: 8 }}>
                 {t.items.map((i, idx) => (
-                  <View key={idx} style={{ flexDirection: 'row', gap: 10 }}>
-                    <View style={{ minWidth: 34, height: 34, borderRadius: 10, backgroundColor: colors.ink900, alignItems: 'center', justifyContent: 'center' }}>
+                  <View key={idx} style={{ flexDirection: 'row', gap: 10, opacity: i.voided ? 0.5 : 1 }}>
+                    <View style={{ minWidth: 34, height: 34, borderRadius: 10, backgroundColor: i.voided ? colors.error : colors.ink900, alignItems: 'center', justifyContent: 'center' }}>
                       <Text style={{ fontFamily: fonts.display, fontSize: 17, color: '#FFFFFF' }}>{i.quantity}×</Text>
                     </View>
-                    <Text style={{ fontSize: 17, fontFamily: fonts.bodyExtraBold, color: colors.ink900, flex: 1 }}>{i.item_name_snapshot}</Text>
+                    <Text style={{ fontSize: 17, fontFamily: fonts.bodyExtraBold, color: i.voided ? colors.error : colors.ink900, flex: 1, textDecorationLine: i.voided ? 'line-through' : 'none' }}>
+                      {i.item_name_snapshot}
+                    </Text>
+                    {i.voided ? (
+                      <Text style={{ alignSelf: 'center', fontSize: 11, fontFamily: fonts.bodyExtraBold, color: colors.error }}>CANCELLED</Text>
+                    ) : i.added && t.current_round === 1 ? (
+                      <Text style={{ alignSelf: 'center', fontSize: 11, fontFamily: fonts.bodyExtraBold, color: colors.success }}>NEW</Text>
+                    ) : null}
                   </View>
                 ))}
                 <AnimatedPressable onPress={() => advance(t)} style={{ marginTop: 4, height: 54, borderRadius: 16, backgroundColor: btnBg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>

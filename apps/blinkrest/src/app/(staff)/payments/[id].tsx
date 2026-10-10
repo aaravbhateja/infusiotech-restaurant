@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/Icon';
@@ -29,6 +29,9 @@ function PaymentDetailScreen() {
   const { membership } = useAuth();
   const [payment, setPayment] = useState<Payment | null>(null);
   const [refund, setRefund] = useState<Refund | null>(null);
+  const [refunding, setRefunding] = useState(false);
+  const [refundReason, setRefundReason] = useState('');
+  const [refundBusy, setRefundBusy] = useState(false);
 
   const load = useCallback(async () => {
     const { data: p } = await supabase
@@ -48,6 +51,26 @@ function PaymentDetailScreen() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
     load();
   }, [load]);
+
+  async function submitRefund() {
+    if (refundReason.trim().length === 0) {
+      Alert.alert('Reason needed', 'Say why this payment is being refunded.');
+      return;
+    }
+    setRefundBusy(true);
+    const { data, error } = await supabase.rpc('refund_payment', { p_payment_id: id, p_amount_minor: null, p_reason: refundReason.trim() });
+    setRefundBusy(false);
+    if (error) {
+      Alert.alert('Could not refund', error.message);
+      return;
+    }
+    setRefunding(false);
+    setRefundReason('');
+    if ((data as { status?: string } | null)?.status === 'pending_approval') {
+      Alert.alert('Sent for approval', 'A manager has to approve this refund.');
+    }
+    load();
+  }
 
   async function reconcile() {
     setPayment((prev) => (prev ? { ...prev, status: 'reconciled' } : prev));
@@ -148,12 +171,47 @@ function PaymentDetailScreen() {
           ))}
         </View>
 
+        {payment && ['paid', 'cash_received', 'reconciled'].includes(payment.status) && (membership?.permissions.has('payments.refund') || membership?.permissions.has('payments.cash.record')) ? (
+          <Pressable onPress={() => { setRefundReason(''); setRefunding(true); }} style={{ height: 54, borderRadius: radius.pill, borderWidth: 1.5, borderColor: '#F4C7C1', alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontFamily: fonts.bodyExtraBold, color: colors.error, fontSize: 15 }}>
+              {membership?.permissions.has('payments.refund') ? 'Refund payment' : 'Request refund'}
+            </Text>
+          </Pressable>
+        ) : null}
+
         {canReconcile ? (
           <Pressable onPress={reconcile} style={{ height: 54, borderRadius: radius.pill, backgroundColor: colors.ink900, alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{ fontFamily: fonts.bodyExtraBold, color: '#FFFFFF', fontSize: 15 }}>Mark reconciled</Text>
           </Pressable>
         ) : null}
       </ScrollView>
+
+      <Modal visible={refunding} transparent animationType="fade" onRequestClose={() => setRefunding(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <View style={{ width: '100%', maxWidth: 380, backgroundColor: colors.surface, borderRadius: 24, padding: 20, gap: 12 }}>
+            <Text style={{ fontSize: 18, fontFamily: fonts.display, color: colors.ink900 }}>Refund full amount</Text>
+            <Text style={{ fontSize: 13, color: colors.ink700 }}>
+              {payment ? `${formatMinor(payment.amount_minor)} will be refunded. ` : ''}
+              {membership?.permissions.has('payments.refund') ? 'Hand the money back to the guest.' : 'A manager has to approve this.'}
+            </Text>
+            <TextInput
+              value={refundReason}
+              onChangeText={setRefundReason}
+              placeholder="Reason for refund"
+              placeholderTextColor={colors.ink500}
+              style={{ height: 48, borderRadius: 14, borderWidth: 1.5, borderColor: colors.inputBorder, paddingHorizontal: 14, color: colors.ink900 }}
+            />
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Pressable onPress={() => setRefunding(false)} style={{ flex: 1, height: 46, borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.inputBorder, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>Cancel</Text>
+              </Pressable>
+              <Pressable disabled={refundBusy} onPress={submitRefund} style={{ flex: 1, height: 46, borderRadius: radius.pill, backgroundColor: colors.error, alignItems: 'center', justifyContent: 'center', opacity: refundBusy ? 0.6 : 1 }}>
+                <Text style={{ fontFamily: fonts.bodyExtraBold, color: '#FFFFFF' }}>{refundBusy ? 'Please wait…' : 'Refund'}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

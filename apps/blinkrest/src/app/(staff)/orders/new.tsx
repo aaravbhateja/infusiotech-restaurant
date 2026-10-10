@@ -15,7 +15,7 @@ type TableOption = { id: string; label: string };
 
 function NewOrderScreen() {
   const { membership } = useAuth();
-  const { tableId: initialTableId } = useLocalSearchParams<{ tableId?: string }>();
+  const { tableId: initialTableId, orderId } = useLocalSearchParams<{ tableId?: string; orderId?: string }>();
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<MenuItem[]>([]);
   const [tables, setTables] = useState<TableOption[]>([]);
@@ -61,6 +61,21 @@ function NewOrderScreen() {
 
   async function placeOrder() {
     if (!membership || cartLines.length === 0) return;
+    // "Add items" mode: the new lines go onto an existing open order.
+    if (orderId) {
+      setPlacing(true);
+      const { error: addError } = await supabase.rpc('add_order_items', {
+        p_order_id: orderId,
+        p_items: cartLines.map((l) => ({ menu_item_id: l.item.id, variant_ids: [], addon_ids: [], quantity: l.qty })),
+      });
+      setPlacing(false);
+      if (addError) {
+        Alert.alert('Could not add items', addError.message);
+        return;
+      }
+      router.back();
+      return;
+    }
     if (!takeaway && !tableId) {
       Alert.alert('Pick a table', 'Choose a table, or switch to Takeaway.');
       return;
@@ -88,10 +103,12 @@ function NewOrderScreen() {
         <Pressable onPress={() => router.back()} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' }}>
           <Icon name="left" size={22} stroke={2.2} color={colors.ink900} />
         </Pressable>
-        <Text style={{ fontSize: 24, fontFamily: fonts.display, color: colors.ink900, flex: 1 }}>New order</Text>
+        <Text style={{ fontSize: 24, fontFamily: fonts.display, color: colors.ink900, flex: 1 }}>{orderId ? 'Add items' : 'New order'}</Text>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: cartCount > 0 ? 110 : 24 }}>
+        {!orderId ? (
+          <>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <Pressable
             onPress={() => setTakeaway(false)}
@@ -133,6 +150,9 @@ function NewOrderScreen() {
             keyboardType="number-pad"
             style={{ height: 48, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.inputBorder, paddingHorizontal: 16, color: colors.ink900 }}
           />
+        ) : null}
+
+          </>
         ) : null}
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
@@ -185,7 +205,7 @@ function NewOrderScreen() {
           style={{ position: 'absolute', left: 16, right: 16, bottom: 24, height: 58, borderRadius: radius.pill, backgroundColor: colors.coral600, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, ...shadow.sheet }}
         >
           <Text style={{ color: '#FFF', fontFamily: fonts.bodyExtraBold }}>{cartCount} item{cartCount > 1 ? 's' : ''}</Text>
-          <Text style={{ color: '#FFF', fontFamily: fonts.bodyExtraBold }}>{placing ? 'Placing…' : `Place order · ${formatMinor(cartTotal)}`}</Text>
+          <Text style={{ color: '#FFF', fontFamily: fonts.bodyExtraBold }}>{placing ? 'Please wait…' : `${orderId ? 'Add to order' : 'Place order'} · ${formatMinor(cartTotal)}`}</Text>
         </Pressable>
       ) : null}
     </SafeAreaView>

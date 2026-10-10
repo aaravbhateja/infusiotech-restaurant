@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Rect } from 'react-native-svg';
 
 import { BottomNav } from '@/components/BottomNav';
+import { ApprovalRequests } from '@/components/ApprovalRequests';
 import { Icon } from '@/components/Icon';
 import { Skeleton } from '@/components/Skeleton';
 import { ErrorState } from '@/components/States';
@@ -533,6 +534,8 @@ export default function Home() {
             </Pressable>
           </View>
         ) : null}
+
+        <ApprovalRequests />
 
         {/* Payment breakdown */}
         {pay.length > 0 ? (

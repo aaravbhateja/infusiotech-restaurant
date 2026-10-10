@@ -4,6 +4,7 @@ import { Alert, Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
 
+import { ApprovalRequests } from '@/components/ApprovalRequests';
 import { BottomNav } from '@/components/BottomNav';
 import { Icon, type IconName } from '@/components/Icon';
 import { useAuth } from '@/hooks/useAuth';
@@ -165,6 +166,8 @@ export default function ManagerHome() {
             </Pressable>
           ))}
         </View>
+
+        <ApprovalRequests />
 
         {discountRequests.length > 0 ? (
           <Animated.View entering={FadeInDown} layout={LinearTransition.springify().damping(18)} style={{ gap: 10 }}>
