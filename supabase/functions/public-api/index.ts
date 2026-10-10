@@ -5,6 +5,8 @@
 //   GET   /v1/payments?since=<ISO time>&limit=<1-100>                  scope payments:read
 //   GET   /v1/menu                                                     scope menu:read
 //   PATCH /v1/menu/<id>   {"available": true|false}                    scope menu:write
+//   POST  /v1/orders      (see docs on the Integrations screen)        scope orders:write
+//   POST  /v1/orders/<id>/cancel   (only your own orders, while new/accepted)   scope orders:write
 //
 // Limit: 120 requests per minute per key. Money is in minor units (paise).
 
@@ -25,9 +27,15 @@ async function sha256Hex(s: string): Promise<string> {
   return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+const ORDER_ERRORS: Record<string, number> = {
+  invalid_source: 400, external_id_required: 400, invalid_type: 400, items_required: 400, delivery_details_required: 400,
+  invalid_menu_item: 400, invalid_quantity: 400, invalid_fee: 400, menu_item_unavailable: 422,
+  not_accepting_orders: 503, too_many_orders: 429,
+};
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, content-type', 'Access-Control-Allow-Methods': 'GET, PATCH, OPTIONS' } });
+    return new Response('ok', { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, content-type', 'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS' } });
   }
 
   const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '').trim();
@@ -62,6 +70,31 @@ Deno.serve(async (req) => {
     if (!UUID.test(orderMatch[1])) return json({ error: 'not_found' }, 404);
     const { data } = await admin.rpc('api_order', { p_tenant: tenant, p_id: orderMatch[1] });
     return data ? json({ data }) : json({ error: 'not_found' }, 404);
+  }
+
+  if (req.method === 'POST' && path === '/v1/orders') {
+    const denied = need('orders:write');
+    if (denied) return denied;
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== 'object') return json({ error: 'invalid_body' }, 400);
+    const { data, error } = await admin.rpc('api_create_order', { p_tenant: tenant, p: body });
+    if (error) {
+      const code = error.message.split(':')[0];
+      const status = ORDER_ERRORS[code];
+      if (!status) return json({ error: 'server_error' }, 500);
+      return json({ error: code, message: error.message }, status);
+    }
+    return json({ data }, data.duplicate ? 200 : 201);
+  }
+
+  const cancelMatch = path.match(/^\/v1\/orders\/([^/]+)\/cancel$/);
+  if (req.method === 'POST' && cancelMatch) {
+    const denied = need('orders:write');
+    if (denied) return denied;
+    if (!UUID.test(cancelMatch[1])) return json({ error: 'not_found' }, 404);
+    const { data } = await admin.rpc('api_cancel_order', { p_tenant: tenant, p_id: cancelMatch[1], p_source: 'api' });
+    if (data === 'ok') return json({ ok: true });
+    return data === 'too_late' ? json({ error: 'too_late', message: 'The kitchen has already started this order.' }, 409) : json({ error: 'not_found' }, 404);
   }
 
   if (req.method === 'GET' && path === '/v1/payments') {

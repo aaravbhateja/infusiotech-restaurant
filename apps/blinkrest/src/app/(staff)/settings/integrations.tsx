@@ -16,6 +16,7 @@ const API_BASE = `${process.env.EXPO_PUBLIC_SUPABASE_URL ?? ''}/functions/v1/pub
 
 const SCOPES = [
   ['orders:read', 'Read orders'],
+  ['orders:write', 'Create & cancel orders'],
   ['payments:read', 'Read payments'],
   ['menu:read', 'Read menu'],
   ['menu:write', 'Turn dishes on/off'],
@@ -166,7 +167,7 @@ function IntegrationsScreen() {
             <Text selectable style={{ fontSize: 12, color: colors.info }}>{API_BASE}</Text>
           </Pressable>
           <Text style={{ fontSize: 12, color: colors.ink700, lineHeight: 18 }}>
-            {'Send the key as  Authorization: Bearer brk_...\n\nGET /v1/orders?since=2026-01-01T00:00:00Z&status=served\nGET /v1/orders/{id}\nGET /v1/payments?since=...\nGET /v1/menu\nPATCH /v1/menu/{id}  {"available": false}\n\nMoney is in paise. Limit: 120 requests a minute.\n\nWebhook check: HMAC-SHA256 of "<X-BlinkRest-Timestamp>.<raw body>" with your signing secret must equal the X-BlinkRest-Signature value (after "sha256=").'}
+            {'Send the key as  Authorization: Bearer brk_...\n\nGET /v1/orders?since=2026-01-01T00:00:00Z&status=served\nGET /v1/orders/{id}\nGET /v1/payments?since=...\nGET /v1/menu\nPATCH /v1/menu/{id}  {"available": false}\n\nPOST /v1/orders (create)\nPOST /v1/orders/{id}/cancel\n\nCreate body: {"source":"myapp", "external_id":"your-order-id", "type":"takeaway" or "delivery", "customer":{"name","phone"}, "delivery":{"address"}, "note", "items":[{"menu_item_id","quantity"}]}. Sending the same external_id again returns the same order, so retries are safe. Takeaway/delivery pricing from Growth settings applies. Staff accept these orders like any other (or they auto-accept) and record the payment.\n\nMoney is in paise. Limit: 120 requests a minute.\n\nWebhook check: HMAC-SHA256 of "<X-BlinkRest-Timestamp>.<raw body>" with your signing secret must equal the X-BlinkRest-Signature value (after "sha256=").'}
           </Text>
         </View>
       </ScrollView>

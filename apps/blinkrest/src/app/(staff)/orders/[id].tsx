@@ -40,6 +40,7 @@ type OrderDetailData = {
   created_at: string;
   table: { label: string } | null;
   order_type: 'dine_in' | 'takeaway' | 'delivery';
+  source: string | null;
   delivery_address: string | null;
   delivery_phone: string | null;
   delivery_status: 'pending' | 'out' | 'delivered' | null;
@@ -90,7 +91,7 @@ function OrderDetailScreen() {
     const { data } = await supabase
       .from('orders')
       .select(
-        'id, order_number, order_status, payment_status, total_minor, priority, order_type, delivery_address, delivery_phone, delivery_status, delivery_fee_minor, customer:customers(id, name, phone, points_balance), currency, created_at, table:restaurant_tables(label), items:order_items(id, item_name_snapshot, quantity, line_total_minor, variant_snapshot, addon_snapshot, voided_at, void_reason, added_after_kot)',
+        'id, order_number, order_status, payment_status, total_minor, priority, order_type, source, delivery_address, delivery_phone, delivery_status, delivery_fee_minor, customer:customers(id, name, phone, points_balance), currency, created_at, table:restaurant_tables(label), items:order_items(id, item_name_snapshot, quantity, line_total_minor, variant_snapshot, addon_snapshot, voided_at, void_reason, added_after_kot)',
       )
       .eq('id', id)
       .single();
@@ -403,6 +404,7 @@ function OrderDetailScreen() {
             Payment: {order.payment_status}
           </Text>
         )}
+        {order?.source ? <Text style={{ fontSize: 12, fontFamily: fonts.bodyExtraBold, color: colors.info }}>VIA {order.source.toUpperCase()}</Text> : null}
         {order && order.order_type === 'delivery' ? (
           <View style={{ backgroundColor: colors.infoBg, borderRadius: 18, padding: 14, gap: 4 }}>
             <Text style={{ fontSize: 12, fontFamily: fonts.bodyExtraBold, color: colors.info, letterSpacing: 0.6 }}>
