@@ -8,6 +8,7 @@ import { Button } from '@/components/Button';
 import { Icon } from '@/components/Icon';
 import { RequireAccess } from '@/components/RequireAccess';
 import { RecipeEditor } from '@/components/inventory/RecipeEditor';
+import { ComboEditor, MenuExtras, type Combo } from '@/components/MenuExtras';
 import { TextField } from '@/components/TextField';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsOnline } from '@/hooks/useIsOnline';
@@ -38,6 +39,11 @@ function EditMenuItemScreen() {
   const [isVeg, setIsVeg] = useState(true);
   const [station, setStation] = useState('general');
   const [prepMinutes, setPrepMinutes] = useState('');
+  const [allergens, setAllergens] = useState<string[]>([]);
+  const [spice, setSpice] = useState<number | null>(null);
+  const [nameHi, setNameHi] = useState('');
+  const [descHi, setDescHi] = useState('');
+  const [combo, setCombo] = useState<Combo>([]);
   const [available, setAvailable] = useState(true);
   const [imagePath, setImagePath] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -51,7 +57,7 @@ function EditMenuItemScreen() {
       supabase.from('menu_categories').select('id, name').eq('tenant_id', membership.tenantId).eq('is_active', true).order('sort_order'),
       supabase
         .from('menu_items')
-        .select('category_id, name, description, price_minor, dietary_labels, is_available, image_path, station, prep_minutes, base_price_minor')
+        .select('category_id, name, description, price_minor, dietary_labels, is_available, image_path, station, prep_minutes, base_price_minor, allergens, spice_level, name_hi, description_hi, combo_of')
         .eq('id', id)
         .eq('tenant_id', membership.tenantId)
         .single(),
@@ -66,6 +72,11 @@ function EditMenuItemScreen() {
       setIsVeg(item.dietary_labels?.includes('veg') ?? true);
       setStation(item.station ?? 'general');
       setPrepMinutes(item.prep_minutes ? String(item.prep_minutes) : '');
+      setAllergens(item.allergens ?? []);
+      setSpice(item.spice_level ?? null);
+      setNameHi(item.name_hi ?? '');
+      setDescHi(item.description_hi ?? '');
+      setCombo((item.combo_of as Combo | null) ?? []);
       setAvailable(item.is_available);
       setImagePath(item.image_path ?? null);
     }
@@ -172,6 +183,11 @@ function EditMenuItemScreen() {
         image_path: imagePath,
         station,
         prep_minutes: prepMinutes ? Number(prepMinutes) : null,
+        allergens,
+        spice_level: spice,
+        name_hi: nameHi.trim() || null,
+        description_hi: descHi.trim() || null,
+        combo_of: combo.length > 0 ? combo : null,
       })
       .eq('id', id);
     setSaving(false);
@@ -359,6 +375,10 @@ function EditMenuItemScreen() {
               })}
             </View>
           </View>
+
+
+          <MenuExtras allergens={allergens} setAllergens={setAllergens} spice={spice} setSpice={setSpice} nameHi={nameHi} setNameHi={setNameHi} descHi={descHi} setDescHi={setDescHi} />
+          <ComboEditor itemId={id} value={combo} onChange={setCombo} />
 
           <View style={{ gap: 8 }}>
             <Text style={{ fontSize: 13, fontFamily: fonts.bodyBold, color: colors.ink900 }}>Prep time (minutes)</Text>

@@ -55,6 +55,10 @@ type MenuItem = {
   is_available: boolean;
   image_path: string | null;
   dietary_labels: string[];
+  allergens?: string[];
+  spice_level?: number | null;
+  name_hi?: string | null;
+  description_hi?: string | null;
 };
 
 type Category = { id: string; name: string; sort_order: number };
@@ -68,6 +72,28 @@ type TableInfo = {
 };
 
 type CartLine = { item: MenuItem; quantity: number };
+
+const HI: Record<string, string> = {
+  'Search for dishes': 'व्यंजन खोजें',
+  'Veg only': 'केवल शाकाहारी',
+  All: 'सभी',
+  'Order again': 'फिर से ऑर्डर करें',
+  'Avoid:': 'न चाहिए:',
+  Mild: 'कम तीखा',
+  Medium: 'मध्यम तीखा',
+  Hot: 'तेज़ तीखा',
+  gluten: 'ग्लूटेन',
+  dairy: 'डेयरी',
+  egg: 'अंडा',
+  nuts: 'मेवे',
+  peanuts: 'मूंगफली',
+  soy: 'सोया',
+  fish: 'मछली',
+  shellfish: 'शेलफिश',
+  sesame: 'तिल',
+};
+const ALLERGENS = ['gluten', 'dairy', 'egg', 'nuts', 'peanuts', 'soy', 'fish', 'shellfish', 'sesame'];
+const SPICE_LABEL = ['', 'Mild', 'Medium', 'Hot'];
 
 type Quote = { subtotal_minor: number; discount_minor: number; gst_minor: number; total_minor: number };
 
@@ -152,6 +178,18 @@ export function PublicOrderScreen({ token, previewTenantId, onBack }: { token?: 
   // reopening the tab) lands back on the tracking screen instead of a blank
   // menu — the guest never has to re-scan the QR code just to keep watching
   // their order's status.
+  // Language, allergen filter and "order again" are remembered on this device.
+  const [lang, setLang] = useState<'en' | 'hi'>('en');
+  const [avoid, setAvoid] = useState<string[]>([]);
+  const [lastOrder, setLastOrder] = useState<{ id: string; qty: number }[]>([]);
+  const tr = (en: string) => (lang === 'hi' ? HI[en] ?? en : en);
+  const itemName = (i: MenuItem) => (lang === 'hi' && i.name_hi ? i.name_hi : i.name);
+  const itemDesc = (i: MenuItem) => (lang === 'hi' && i.description_hi ? i.description_hi : i.description);
+  useEffect(() => {
+    AsyncStorage.getItem('blinkrest:lang').then((v) => {
+      if (v === 'hi' || v === 'en') setLang(v);
+    });
+  }, []);
   useEffect(() => {
     if (isPreview || !token) return;
     let cancelled = false;
@@ -214,7 +252,7 @@ export function PublicOrderScreen({ token, previewTenantId, onBack }: { token?: 
         const [{ data: cats }, { data: menuItems }] = await withTimeout(
           Promise.all([
             supabase.from('menu_categories').select('id, name, sort_order').eq('tenant_id', data.tenant.id).eq('is_active', true).order('sort_order'),
-            supabase.from('menu_items').select('id, category_id, name, description, price_minor, currency, is_available, image_path, dietary_labels').eq('tenant_id', data.tenant.id).eq('is_available', true).order('sort_order'),
+            supabase.from('menu_items').select('id, category_id, name, description, price_minor, currency, is_available, image_path, dietary_labels, allergens, spice_level, name_hi, description_hi').eq('tenant_id', data.tenant.id).eq('is_available', true).order('sort_order'),
           ]),
           LOAD_TIMEOUT_MS,
         );
@@ -250,7 +288,7 @@ export function PublicOrderScreen({ token, previewTenantId, onBack }: { token?: 
     const timer = setInterval(async () => {
       const { data: fresh } = await supabase
         .from('menu_items')
-        .select('id, category_id, name, description, price_minor, currency, is_available, image_path, dietary_labels')
+        .select('id, category_id, name, description, price_minor, currency, is_available, image_path, dietary_labels, allergens, spice_level, name_hi, description_hi')
         .eq('tenant_id', tenantIdForSync)
         .eq('is_available', true)
         .order('sort_order');
@@ -269,11 +307,38 @@ export function PublicOrderScreen({ token, previewTenantId, onBack }: { token?: 
     const q = query.trim().toLowerCase();
     return items.filter((item) => {
       const matchesCategory = activeCategory === 'All' || item.category_id === activeCategory;
-      const matchesQuery = !q || item.name.toLowerCase().includes(q);
+      const matchesQuery = !q || item.name.toLowerCase().includes(q) || (item.name_hi ?? '').toLowerCase().includes(q);
       const matchesVeg = !vegOnly || item.dietary_labels.includes('veg');
-      return matchesCategory && matchesQuery && matchesVeg;
+      const safe = avoid.length === 0 || !(item.allergens ?? []).some((a) => avoid.includes(a));
+      return matchesCategory && matchesQuery && matchesVeg && safe;
     });
-  }, [items, activeCategory, query, vegOnly]);
+  }, [items, activeCategory, query, vegOnly, avoid]);
+
+  // Remember the last order on this device so a returning guest can repeat it.
+  const tenantForRepeat = info?.tenant?.id;
+  useEffect(() => {
+    if (!tenantForRepeat || isPreview) return;
+    AsyncStorage.getItem(`blinkrest:last:${tenantForRepeat}`).then((raw) => {
+      try {
+        if (raw) setLastOrder(JSON.parse(raw));
+      } catch {
+        // ignore corrupt storage
+      }
+    });
+  }, [tenantForRepeat, isPreview]);
+
+  function orderAgain() {
+    const next: Record<string, CartLine> = {};
+    for (const l of lastOrder) {
+      const item = items.find((i) => i.id === l.id);
+      if (item) next[item.id] = { item, quantity: l.qty };
+    }
+    if (Object.keys(next).length === 0) {
+      Alert.alert('Not available', 'Those dishes are not available right now.');
+      return;
+    }
+    setCart(next);
+  }
 
   const acceptingOrders = info?.tenant.settings?.accepting_orders !== false;
   const payOnlineAvailable = info?.tenant.pay_online_enabled === true;
@@ -401,6 +466,10 @@ export function PublicOrderScreen({ token, previewTenantId, onBack }: { token?: 
       razorpayOrderId: payment?.razorpayOrderId,
       razorpaySignature: payment?.razorpaySignature,
     });
+    if (!isPreview && info?.tenant?.id) {
+      AsyncStorage.setItem(`blinkrest:last:${info.tenant.id}`, JSON.stringify(cartLines.map((l) => ({ id: l.item.id, qty: l.quantity })))).catch(() => {});
+      setLastOrder(cartLines.map((l) => ({ id: l.item.id, qty: l.quantity })));
+    }
     setConfirmation(data);
     if (!isPreview && token) {
       AsyncStorage.setItem(confirmationStorageKey(token), JSON.stringify(data)).catch(() => {});
@@ -735,7 +804,7 @@ export function PublicOrderScreen({ token, previewTenantId, onBack }: { token?: 
                   </View>
                 )}
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ fontSize: 15, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }} numberOfLines={1}>{l.item.name}</Text>
+                  <Text style={{ fontSize: 15, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }} numberOfLines={1}>{itemName(l.item)}</Text>
                   <Text style={{ fontSize: 13, color: colors.ink500 }}>{formatMinor(l.item.price_minor, l.item.currency)} each</Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: '#8FD3AE', borderRadius: 12, backgroundColor: '#F3FBF6' }}>
@@ -981,7 +1050,7 @@ export function PublicOrderScreen({ token, previewTenantId, onBack }: { token?: 
             <TextInput
               value={query}
               onChangeText={setQuery}
-              placeholder="Search for dishes"
+              placeholder={tr('Search for dishes')}
               placeholderTextColor={colors.ink500}
               style={{ flex: 1, fontSize: 15, color: colors.ink900, fontFamily: fonts.body }}
             />
@@ -993,14 +1062,48 @@ export function PublicOrderScreen({ token, previewTenantId, onBack }: { token?: 
             <View style={{ width: 14, height: 14, borderWidth: 1.6, borderColor: '#0E8F4A', borderRadius: 3, alignItems: 'center', justifyContent: 'center' }}>
               {vegOnly ? <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#0E8F4A' }} /> : null}
             </View>
-            <Text style={{ fontSize: 13, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>Veg only</Text>
+            <Text style={{ fontSize: 13, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>{tr('Veg only')}</Text>
           </Pressable>
         </View>
+
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+          {(['en', 'hi'] as const).map((l) => (
+            <Pressable
+              key={l}
+              onPress={() => {
+                setLang(l);
+                AsyncStorage.setItem('blinkrest:lang', l).catch(() => {});
+              }}
+              style={{ height: 34, paddingHorizontal: 12, borderRadius: radius.pill, backgroundColor: lang === l ? colors.ink900 : colors.surface, borderWidth: lang === l ? 0 : 1.5, borderColor: colors.line, justifyContent: 'center' }}
+            >
+              <Text style={{ fontSize: 12, fontFamily: fonts.bodyExtraBold, color: lang === l ? '#FFFFFF' : colors.ink900 }}>{l === 'en' ? 'English' : 'हिन्दी'}</Text>
+            </Pressable>
+          ))}
+          {lastOrder.length > 0 && Object.keys(cart).length === 0 ? (
+            <Pressable onPress={orderAgain} style={{ height: 34, paddingHorizontal: 12, borderRadius: radius.pill, backgroundColor: colors.coral50, justifyContent: 'center' }}>
+              <Text style={{ fontSize: 12, fontFamily: fonts.bodyExtraBold, color: colors.coral700 }}>↻ {tr('Order again')}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+
+        {items.some((i) => (i.allergens ?? []).length > 0) ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, alignItems: 'center' }}>
+            <Text style={{ fontSize: 12, fontFamily: fonts.bodyExtraBold, color: colors.ink700 }}>{tr('Avoid:')}</Text>
+            {ALLERGENS.filter((a) => items.some((i) => (i.allergens ?? []).includes(a))).map((a) => {
+              const on = avoid.includes(a);
+              return (
+                <Pressable key={a} onPress={() => setAvoid((v) => (on ? v.filter((x) => x !== a) : [...v, a]))} style={{ height: 30, paddingHorizontal: 11, borderRadius: radius.pill, backgroundColor: on ? colors.error : colors.surface, borderWidth: on ? 0 : 1.5, borderColor: colors.line, justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 12, fontFamily: fonts.bodyBold, color: on ? '#FFFFFF' : colors.ink900, textTransform: 'capitalize' }}>{tr(a)}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        ) : null}
 
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {['All', ...categories.map((c) => c.id)].map((id) => {
             const active = activeCategory === id;
-            const label = id === 'All' ? 'All' : categories.find((c) => c.id === id)?.name ?? '';
+            const label = id === 'All' ? tr('All') : categories.find((c) => c.id === id)?.name ?? '';
             return (
               <Pressable
                 key={id}
@@ -1069,10 +1172,17 @@ export function PublicOrderScreen({ token, previewTenantId, onBack }: { token?: 
                     <View style={{ width: 14, height: 14, borderWidth: 1.6, borderColor: isVeg ? '#0E8F4A' : '#A0361C', borderRadius: 3, alignItems: 'center', justifyContent: 'center' }}>
                       <View style={{ width: 6, height: 6, borderRadius: isVeg ? 3 : 0, backgroundColor: isVeg ? '#0E8F4A' : '#A0361C' }} />
                     </View>
-                    <Text numberOfLines={1} style={{ fontSize: 15, fontFamily: fonts.bodyExtraBold, color: colors.ink900, flex: 1 }}>{item.name}</Text>
+                    <Text numberOfLines={1} style={{ fontSize: 15, fontFamily: fonts.bodyExtraBold, color: colors.ink900, flex: 1 }}>{itemName(item)}</Text>
                   </View>
-                  {item.description ? (
-                    <Text numberOfLines={1} style={{ fontSize: 12, color: colors.ink500, marginTop: -6 }}>{item.description}</Text>
+                  {itemDesc(item) ? (
+                    <Text numberOfLines={1} style={{ fontSize: 12, color: colors.ink500, marginTop: -6 }}>{itemDesc(item)}</Text>
+                  ) : null}
+                  {(item.allergens ?? []).length > 0 || item.spice_level ? (
+                    <Text numberOfLines={1} style={{ fontSize: 11, color: colors.ink500, marginTop: -4, textTransform: 'capitalize' }}>
+                      {item.spice_level ? `${tr(SPICE_LABEL[item.spice_level])}` : ''}
+                      {item.spice_level && (item.allergens ?? []).length > 0 ? ' · ' : ''}
+                      {(item.allergens ?? []).length > 0 ? `${lang === 'hi' ? 'इसमें' : 'Contains'}: ${(item.allergens ?? []).map((a) => tr(a)).join(', ')}` : ''}
+                    </Text>
                   ) : null}
                   <Text style={{ fontSize: 14, fontFamily: fonts.bodyBold, color: colors.ink900, marginTop: -4 }}>
                     {formatMinor(item.price_minor, item.currency)}

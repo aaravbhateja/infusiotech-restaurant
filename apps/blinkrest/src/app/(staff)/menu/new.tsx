@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AnimatedToggle } from '@/components/AnimatedToggle';
 import { Button } from '@/components/Button';
 import { Icon } from '@/components/Icon';
+import { MenuExtras } from '@/components/MenuExtras';
 import { RequireAccess } from '@/components/RequireAccess';
 import { TextField } from '@/components/TextField';
 import { useAuth } from '@/hooks/useAuth';
@@ -31,6 +32,10 @@ function NewMenuItemScreen() {
   const [isVeg, setIsVeg] = useState(true);
   const [station, setStation] = useState('general');
   const [prepMinutes, setPrepMinutes] = useState('');
+  const [allergens, setAllergens] = useState<string[]>([]);
+  const [spice, setSpice] = useState<number | null>(null);
+  const [nameHi, setNameHi] = useState('');
+  const [descHi, setDescHi] = useState('');
   const [available, setAvailable] = useState(true);
   const [imagePath, setImagePath] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -102,6 +107,10 @@ function NewMenuItemScreen() {
       image_path: imagePath,
       station,
       prep_minutes: prepMinutes ? Number(prepMinutes) : null,
+      allergens,
+      spice_level: spice,
+      name_hi: nameHi.trim() || null,
+      description_hi: descHi.trim() || null,
     });
     setSaving(false);
     if (error) {
@@ -263,6 +272,8 @@ function NewMenuItemScreen() {
             </View>
           </View>
 
+
+          <MenuExtras allergens={allergens} setAllergens={setAllergens} spice={spice} setSpice={setSpice} nameHi={nameHi} setNameHi={setNameHi} descHi={descHi} setDescHi={setDescHi} />
           <View style={{ gap: 8 }}>
             <Text style={{ fontSize: 13, fontFamily: fonts.bodyBold, color: colors.ink900 }}>Prep time (minutes)</Text>
             <TextInput
