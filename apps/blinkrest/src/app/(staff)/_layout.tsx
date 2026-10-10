@@ -55,6 +55,7 @@ export default function StaffLayout() {
       <Stack.Screen name="settings/branding" options={{ gestureEnabled: false, fullScreenGestureEnabled: false }} />
       <Stack.Screen name="settings/payments-kyc" />
       <Stack.Screen name="settings/integrations" />
+      <Stack.Screen name="settings/aggregators" />
       <Stack.Screen name="settings/delete-account" />
       <Stack.Screen name="staff/permissions" />
       <Stack.Screen name="staff/roles" />

@@ -40,6 +40,10 @@ verify_jwt = false
 [functions.public-api]
 verify_jwt = false
 
+# Aggregator partners (Dyno) post here with a per-restaurant token.
+[functions.aggregator-webhook]
+verify_jwt = false
+
 [auth.email]
 enable_signup = true
 enable_confirmations = true
