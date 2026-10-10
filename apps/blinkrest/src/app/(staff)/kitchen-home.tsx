@@ -36,6 +36,7 @@ type Ticket = {
   round_started_at: string;
   current_round: number;
   kot_revision: number;
+  priority: 'normal' | 'rush';
   table: { label: string } | null;
   items: Item[];
 };
@@ -61,7 +62,7 @@ export default function KitchenHome() {
   const load = useCallback(async () => {
     const { data: orders } = await supabase
       .from('orders')
-      .select('id, order_number, order_status, created_at, round_started_at, current_round, kot_revision, table:restaurant_tables(label)')
+      .select('id, order_number, order_status, created_at, round_started_at, current_round, kot_revision, priority, table:restaurant_tables(label)')
       .in('order_status', ['accepted', 'preparing'])
       .order('created_at');
     const list = (orders as unknown as Omit<Ticket, 'items'>[]) ?? [];
@@ -108,7 +109,8 @@ export default function KitchenHome() {
   }
 
   const stations = Array.from(new Set(tickets.flatMap((t) => t.items.map((i) => i.station))));
-  const visibleTickets = tickets
+  const visibleTickets = [...tickets]
+    .sort((a, b) => (a.priority === 'rush' ? 0 : 1) - (b.priority === 'rush' ? 0 : 1))
     .map((t) => ({ ...t, items: station === 'all' ? t.items : t.items.filter((i) => i.station === station) }))
     .filter((t) => t.items.length > 0);
 
@@ -185,6 +187,7 @@ export default function KitchenHome() {
                 <Text style={{ fontSize: 22, fontFamily: fonts.display, color: colors.ink900 }}>#{t.order_number}</Text>
                 <Text style={{ fontSize: 14, fontFamily: fonts.bodyExtraBold, color: colors.ink900, flex: 1 }}>
                   {t.table?.label ?? 'Takeaway'}
+                  {t.priority === 'rush' ? '  ·  RUSH' : ''}
                   {t.current_round > 1 ? '  ·  ADDED ITEMS' : ''}
                   {t.kot_revision > 0 && t.current_round === 1 ? '  ·  REVISED' : ''}
                 </Text>

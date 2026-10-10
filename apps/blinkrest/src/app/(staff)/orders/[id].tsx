@@ -33,6 +33,7 @@ type OrderDetailData = {
   order_status: string;
   payment_status: string;
   total_minor: number;
+  priority: 'normal' | 'rush';
   currency: string;
   created_at: string;
   table: { label: string } | null;
@@ -69,7 +70,7 @@ function OrderDetailScreen() {
     const { data } = await supabase
       .from('orders')
       .select(
-        'id, order_number, order_status, payment_status, total_minor, currency, created_at, table:restaurant_tables(label), items:order_items(id, item_name_snapshot, quantity, line_total_minor, variant_snapshot, addon_snapshot, voided_at, void_reason, added_after_kot)',
+        'id, order_number, order_status, payment_status, total_minor, priority, currency, created_at, table:restaurant_tables(label), items:order_items(id, item_name_snapshot, quantity, line_total_minor, variant_snapshot, addon_snapshot, voided_at, void_reason, added_after_kot)',
       )
       .eq('id', id)
       .single();
@@ -170,6 +171,16 @@ function OrderDetailScreen() {
     if ((data as { status?: string } | null)?.status === 'pending_approval') {
       Alert.alert('Sent for approval', 'A manager has to approve removing this item.');
     }
+    load();
+  }
+
+  const canSetRush = !!order && ['new', 'accepted', 'preparing', 'ready'].includes(order.order_status) &&
+    !!(membership?.permissions.has('orders.edit') || membership?.permissions.has('orders.status.update') || membership?.permissions.has('orders.accept'));
+
+  async function toggleRush() {
+    if (!order) return;
+    const { error } = await supabase.rpc('set_order_priority', { p_order_id: order.id, p_priority: order.priority === 'rush' ? 'normal' : 'rush' });
+    if (error) Alert.alert('Could not update priority', error.message);
     load();
   }
 
@@ -296,6 +307,7 @@ function OrderDetailScreen() {
             Payment: {order.payment_status}
           </Text>
         )}
+        {canSetRush ? <Button title={order.priority === 'rush' ? 'Remove RUSH priority' : 'Mark as RUSH'} variant="outline" onPress={toggleRush} /> : null}
         {canEditItems ? <Button title="Add items" variant="outline" onPress={() => router.push(`/(staff)/orders/new?orderId=${order.id}` as never)} /> : null}
         {canSeeBill ? <Button title="Check bill" variant="outline" onPress={() => setBillOpen(true)} /> : null}
       </View>

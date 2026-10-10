@@ -241,6 +241,9 @@ function AnalyticsScreen() {
           <Text style={{ fontSize: 26, fontFamily: fonts.display, color: colors.ink900 }}>Analytics</Text>
           <Text style={{ fontSize: 12, color: colors.ink500 }}>{membership?.tenantName}</Text>
         </View>
+        <Pressable onPress={() => router.push('/(staff)/kitchen-stats' as never)} style={{ height: 40, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.inputBorder, justifyContent: 'center', marginRight: 8 }}>
+          <Text style={{ fontSize: 13, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>Kitchen</Text>
+        </Pressable>
         <Pressable onPress={exportReport} disabled={!stats.hasData} style={{ height: 40, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.inputBorder, flexDirection: 'row', alignItems: 'center', gap: 6, opacity: stats.hasData ? 1 : 0.5 }}>
           <Icon name="download" size={15} color={colors.ink900} />
           <Text style={{ fontSize: 13, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>Export</Text>
