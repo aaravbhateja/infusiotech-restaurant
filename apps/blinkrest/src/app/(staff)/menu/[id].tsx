@@ -7,6 +7,7 @@ import { AnimatedToggle } from '@/components/AnimatedToggle';
 import { Button } from '@/components/Button';
 import { Icon } from '@/components/Icon';
 import { RequireAccess } from '@/components/RequireAccess';
+import { RecipeEditor } from '@/components/inventory/RecipeEditor';
 import { TextField } from '@/components/TextField';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsOnline } from '@/hooks/useIsOnline';
@@ -387,6 +388,8 @@ function EditMenuItemScreen() {
             </View>
           )}
         </View>
+
+        <RecipeEditor menuItemId={id} priceMinor={Math.round(parseFloat(price || '0') * 100)} />
 
         {history.length > 0 ? (
           <View style={{ backgroundColor: colors.surface, borderRadius: 22, borderWidth: 1, borderColor: '#F4ECE6', padding: 16, gap: 10 }}>
