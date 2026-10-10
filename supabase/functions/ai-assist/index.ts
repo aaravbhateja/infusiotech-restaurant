@@ -8,7 +8,7 @@
 // Runs as the caller (their JWT is forwarded), so permissions and the daily
 // allowance in ai_consume() apply. The model only ever sees dish names and
 // aggregate numbers, never customer names, phone numbers or individual bills.
-// Needs the ANTHROPIC_API_KEY secret; without it the function reports
+// Needs the GROQ_API_KEY (free tier) or ANTHROPIC_API_KEY secret; without it the function reports
 // 'ai_not_configured' and uses none of the allowance.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -17,17 +17,37 @@ import { corsHeaders, handleCors } from '../_shared/cors.ts';
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
-const MODEL = Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-haiku-4-5-20251001';
+const groqKey = Deno.env.get('GROQ_API_KEY');
+const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
+const GROQ_MODEL = Deno.env.get('GROQ_MODEL') ?? 'llama-3.3-70b-versatile';
+const ANTHROPIC_MODEL = Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-haiku-4-5-20251001';
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
-async function callModel(system: string, user: string, maxTokens: number): Promise<string> {
+// Groq (free tier, OpenAI-compatible) is used when GROQ_API_KEY is set;
+// otherwise Anthropic if ANTHROPIC_API_KEY is set.
+async function callModel(system: string, user: string, maxTokens: number, asJson = false): Promise<string> {
+  if (groqKey) {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${groqKey}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        max_tokens: maxTokens,
+        temperature: 0.4,
+        ...(asJson ? { response_format: { type: 'json_object' } } : {}),
+        messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+      }),
+    });
+    if (!res.ok) throw new Error(`model_error_${res.status}`);
+    const data = await res.json();
+    return String(data.choices?.[0]?.message?.content ?? '').trim();
+  }
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    headers: { 'x-api-key': apiKey!, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] }),
+    headers: { 'x-api-key': anthropicKey!, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    body: JSON.stringify({ model: ANTHROPIC_MODEL, max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] }),
   });
   if (!res.ok) throw new Error(`model_error_${res.status}`);
   const data = await res.json();
@@ -44,7 +64,7 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => null);
   if (!body || !['describe', 'ask'].includes(body.mode)) return json({ error: 'invalid_request' }, 400);
 
-  if (!apiKey) return json({ error: 'ai_not_configured' });
+  if (!groqKey && !anthropicKey) return json({ error: 'ai_not_configured' });
 
   const supabase = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: auth } } });
   const { data: user } = await supabase.auth.getUser();
@@ -66,6 +86,7 @@ Deno.serve(async (req) => {
           'Never invent ingredients, allergens, health claims or prices; only use what the name and notes support. No emojis.',
         `Dish: ${name}\nCategory: ${category || 'n/a'}\nNotes from the owner: ${notes || 'none'}`,
         400,
+        true,
       );
       const start = text.indexOf('{');
       const end = text.lastIndexOf('}');
