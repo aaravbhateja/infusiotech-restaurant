@@ -1,3 +1,4 @@
+import { AiWriteButton } from '@/components/AiWriteButton';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
@@ -275,6 +276,16 @@ function EditMenuItemScreen() {
           <Text style={{ fontSize: 18, fontFamily: fonts.display, color: colors.ink900 }}>Basics</Text>
           <TextField label="Item name" value={name} onChangeText={setName} autoCapitalize="words" />
           <TextField label="Description" value={description} onChangeText={setDescription} />
+          <AiWriteButton
+            name={name}
+            category={categories.find((c) => c.id === categoryId)?.name}
+            notes={description}
+            onResult={(c) => {
+              setDescription(c.description);
+              setNameHi(c.name_hi);
+              setDescHi(c.description_hi);
+            }}
+          />
 
           <View style={{ gap: 8 }}>
             <Text style={{ fontSize: 13, fontFamily: fonts.bodyBold, color: colors.ink900 }}>Category</Text>

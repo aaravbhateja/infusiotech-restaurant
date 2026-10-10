@@ -4,7 +4,8 @@ import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/Icon';
-import { Button, Chip, card, heading, rupees } from '@/components/inventory/ui';
+import { Button, Chip, Field, card, heading, rupees } from '@/components/inventory/ui';
+import { callAi } from '@/lib/ai';
 import { RequireAccess } from '@/components/RequireAccess';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
@@ -14,6 +15,7 @@ const TABS = [
   ['menu', 'Menu engineering'],
   ['forecast', 'Forecast'],
   ['outlets', 'Outlets'],
+  ['ask', 'Ask AI'],
 ] as const;
 
 type Dish = { menu_item_id: string; name: string; qty: number; revenue_minor: number; unit_margin_minor: number | null; margin_pct: number | null; class: string };
@@ -39,6 +41,20 @@ function InsightsScreen() {
   const [forecast, setForecast] = useState<Day[]>([]);
   const [outlets, setOutlets] = useState<Outlet[]>([]);
   const [filter, setFilter] = useState<string>('All');
+  const [question, setQuestion] = useState('');
+  const [answer, setAnswer] = useState('');
+  const [asking, setAsking] = useState(false);
+
+  async function ask(q?: string) {
+    const text = (q ?? question).trim();
+    if (!text) return;
+    setQuestion(text);
+    setAsking(true);
+    setAnswer('');
+    const res = await callAi<{ answer: string }>({ mode: 'ask', question: text });
+    setAsking(false);
+    setAnswer(res.ok ? res.data.answer : res.message);
+  }
 
   const load = useCallback(async () => {
     const to = new Date();
@@ -136,6 +152,26 @@ function InsightsScreen() {
                 <Text style={{ fontSize: 12, color: colors.ink500 }}>≈ {f.forecast_orders} orders · based on {f.samples} past {f.weekday}s{f.samples < 2 ? ' (low confidence)' : ''}</Text>
               </View>
             ))}
+          </>
+        ) : null}
+
+        {tab === 'ask' ? (
+          <>
+            <Text style={{ fontSize: 13, color: colors.ink700 }}>
+              Ask about your last 30 days of business. The AI only sees totals and dish names, never customer names, phone numbers or individual bills. It can be wrong, so check important numbers in Reports.
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+              {['Why were sales lower on some days?', 'Which dishes should I promote?', 'When should I schedule more staff?', 'How can I raise my average bill?'].map((q) => (
+                <Chip key={q} label={q} on={false} onPress={() => ask(q)} />
+              ))}
+            </ScrollView>
+            <Field label="Your question" value={question} onChangeText={setQuestion} multiline />
+            <Button label={asking ? 'Thinking...' : 'Ask'} onPress={() => ask()} disabled={asking || !question.trim()} />
+            {answer ? (
+              <View style={card}>
+                <Text style={{ fontSize: 15, lineHeight: 22, color: colors.ink900 }}>{answer}</Text>
+              </View>
+            ) : null}
           </>
         ) : null}
 

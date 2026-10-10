@@ -1,3 +1,4 @@
+import { AiWriteButton } from '@/components/AiWriteButton';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
@@ -171,6 +172,16 @@ function NewMenuItemScreen() {
           <Text style={{ fontSize: 18, fontFamily: fonts.display, color: colors.ink900 }}>Basics</Text>
           <TextField label="Item name" value={name} onChangeText={setName} placeholder="Paneer Tikka" autoCapitalize="words" />
           <TextField label="Description" value={description} onChangeText={setDescription} placeholder="Short description" />
+          <AiWriteButton
+            name={name}
+            category={categories.find((c) => c.id === categoryId)?.name}
+            notes={description}
+            onResult={(c) => {
+              setDescription(c.description);
+              setNameHi(c.name_hi);
+              setDescHi(c.description_hi);
+            }}
+          />
 
           <View style={{ gap: 8 }}>
             <Text style={{ fontSize: 13, fontFamily: fonts.bodyBold, color: colors.ink900 }}>Category</Text>

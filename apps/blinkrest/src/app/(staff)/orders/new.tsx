@@ -69,6 +69,22 @@ function NewOrderScreen() {
     .filter((l) => l.item);
   const cartTotal = cartLines.reduce((s, l) => s + l.item.price_minor * l.qty, 0);
   const cartCount = cartLines.reduce((s, l) => s + l.qty, 0);
+  const cartKey = cartLines.map((l) => l.item.id).sort().join(',');
+  const [pairings, setPairings] = useState<{ menu_item_id: string; name: string; price_minor: number }[]>([]);
+  useEffect(() => {
+    if (!cartKey) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clears suggestions when the cart empties
+      setPairings([]);
+      return;
+    }
+    let live = true;
+    supabase.rpc('item_pairings', { p_item_ids: cartKey.split(','), p_limit: 4 }).then(({ data }) => {
+      if (live) setPairings((data as { menu_item_id: string; name: string; price_minor: number }[]) ?? []);
+    });
+    return () => {
+      live = false;
+    };
+  }, [cartKey]);
 
   function setQty(itemId: string, qty: number) {
     setCart((prev) => ({ ...prev, [itemId]: Math.max(0, qty) }));
@@ -252,6 +268,19 @@ function NewOrderScreen() {
         ) : null}
 
           </>
+        ) : null}
+
+        {pairings.length > 0 ? (
+          <View style={{ gap: 6 }}>
+            <Text style={{ fontSize: 12, fontFamily: fonts.bodyExtraBold, color: colors.ink700, letterSpacing: 0.6 }}>GOES WELL WITH</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              {pairings.filter((p) => items.some((i) => i.id === p.menu_item_id)).map((p) => (
+                <Pressable key={p.menu_item_id} onPress={() => setQty(p.menu_item_id, 1)} style={{ height: 40, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: colors.successBg, justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 13, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>+ {p.name}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
         ) : null}
 
         {!orderId && parked.length > 0 ? (
