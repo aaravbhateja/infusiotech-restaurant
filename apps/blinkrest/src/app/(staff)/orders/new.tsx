@@ -28,6 +28,8 @@ function NewOrderScreen() {
   const [custPhone, setCustPhone] = useState('');
   const [custName, setCustName] = useState('');
   const [address, setAddress] = useState('');
+  const [channel, setChannel] = useState<'direct' | 'zomato' | 'swiggy' | 'other'>('direct');
+  const [extId, setExtId] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [cart, setCart] = useState<Record<string, number>>({});
   const [placing, setPlacing] = useState(false);
@@ -171,6 +173,10 @@ function NewOrderScreen() {
       Alert.alert('Could not create order', error.message);
       return;
     }
+    if (takeaway && channel !== 'direct') {
+      const { error: chError } = await supabase.rpc('set_order_channel', { p_order: data.order_id, p_source: channel, p_external_id: extId || null });
+      if (chError) Alert.alert('Order created, but the channel was not saved', chError.message === 'order_id_already_used' ? 'That marketplace order number was already entered.' : chError.message);
+    }
     router.replace(`/(staff)/orders/${data.order_id}` as never);
   }
 
@@ -243,6 +249,26 @@ function NewOrderScreen() {
               placeholderTextColor={colors.ink500}
               style={{ height: 48, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.inputBorder, paddingHorizontal: 16, color: colors.ink900 }}
             />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              {(['direct', 'zomato', 'swiggy', 'other'] as const).map((c) => (
+                <Pressable
+                  key={c}
+                  onPress={() => setChannel(c)}
+                  style={{ height: 38, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: channel === c ? colors.coral600 : colors.surface, borderWidth: channel === c ? 0 : 1.5, borderColor: colors.line, justifyContent: 'center' }}
+                >
+                  <Text style={{ fontSize: 13, fontFamily: fonts.bodyExtraBold, color: channel === c ? '#FFFFFF' : colors.ink900 }}>{c === 'direct' ? 'Own order' : c[0].toUpperCase() + c.slice(1)}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+            {channel !== 'direct' ? (
+              <TextInput
+                value={extId}
+                onChangeText={setExtId}
+                placeholder="Marketplace order number (optional)"
+                placeholderTextColor={colors.ink500}
+                style={{ height: 48, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.inputBorder, paddingHorizontal: 16, color: colors.ink900 }}
+              />
+            ) : null}
             {delivery ? (
               <TextInput
                 value={address}

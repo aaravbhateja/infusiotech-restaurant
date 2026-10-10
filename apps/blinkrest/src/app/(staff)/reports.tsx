@@ -4,6 +4,7 @@ import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AccountingExport } from '@/components/AccountingExport';
+import { ChannelsTab } from '@/components/ChannelsTab';
 import { Icon } from '@/components/Icon';
 import { Button, Chip, Field, Sheet, card, heading, rupees } from '@/components/inventory/ui';
 import { RequireAccess } from '@/components/RequireAccess';
@@ -16,6 +17,7 @@ const TABS = [
   ['pay', 'Payments'],
   ['ctl', 'Controls'],
   ['staff', 'Staff'],
+  ['chan', 'Channels'],
   ['acct', 'Accounting'],
 ] as const;
 
@@ -236,6 +238,7 @@ function ReportsScreen() {
           </>
         ) : null}
 
+        {tab === 'chan' ? <ChannelsTab /> : null}
         {tab === 'acct' ? <AccountingExport /> : null}
 
         {tab === 'staff' ? (
