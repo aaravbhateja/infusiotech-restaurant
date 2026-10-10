@@ -24,6 +24,10 @@ function NewOrderScreen() {
   const [tableId, setTableId] = useState<string | null>(initialTableId ?? null);
   const [takeaway, setTakeaway] = useState(!initialTableId);
   const [guestCount, setGuestCount] = useState('');
+  const [delivery, setDelivery] = useState(false);
+  const [custPhone, setCustPhone] = useState('');
+  const [custName, setCustName] = useState('');
+  const [address, setAddress] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [cart, setCart] = useState<Record<string, number>>({});
   const [placing, setPlacing] = useState(false);
@@ -131,12 +135,20 @@ function NewOrderScreen() {
       Alert.alert('Pick a table', 'Choose a table, or switch to Takeaway.');
       return;
     }
+    if (delivery && (custPhone.replace(/\D/g, '').length < 10 || !address.trim())) {
+      Alert.alert('Delivery details needed', 'Enter a 10-digit phone number and the delivery address.');
+      return;
+    }
     setPlacing(true);
     const { data, error } = await supabase.rpc('create_staff_order', {
       p_tenant_id: membership.tenantId,
       p_table_id: takeaway ? null : tableId,
       p_items: cartLines.map((l) => ({ menu_item_id: l.item.id, variant_ids: [], addon_ids: [], quantity: l.qty })),
       p_guest_count: guestCount.trim() ? Number(guestCount) : null,
+      p_order_type: delivery ? 'delivery' : takeaway ? 'takeaway' : 'dine_in',
+      p_customer_phone: takeaway && custPhone.trim() ? custPhone : null,
+      p_customer_name: takeaway && custName.trim() ? custName : null,
+      p_delivery_address: delivery ? address : null,
     });
     setPlacing(false);
     if (error) {
@@ -162,16 +174,22 @@ function NewOrderScreen() {
           <>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <Pressable
-            onPress={() => setTakeaway(false)}
+            onPress={() => { setTakeaway(false); setDelivery(false); }}
             style={{ flex: 1, height: 44, borderRadius: radius.pill, backgroundColor: !takeaway ? colors.ink900 : colors.surface, borderWidth: !takeaway ? 0 : 1.5, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' }}
           >
             <Text style={{ fontSize: 13, fontFamily: !takeaway ? fonts.bodyExtraBold : fonts.bodyBold, color: !takeaway ? '#FFFFFF' : colors.ink900 }}>Dine-in</Text>
           </Pressable>
           <Pressable
-            onPress={() => setTakeaway(true)}
-            style={{ flex: 1, height: 44, borderRadius: radius.pill, backgroundColor: takeaway ? colors.ink900 : colors.surface, borderWidth: takeaway ? 0 : 1.5, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' }}
+            onPress={() => { setTakeaway(true); setDelivery(false); }}
+            style={{ flex: 1, height: 44, borderRadius: radius.pill, backgroundColor: takeaway && !delivery ? colors.ink900 : colors.surface, borderWidth: takeaway && !delivery ? 0 : 1.5, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' }}
           >
-            <Text style={{ fontSize: 13, fontFamily: takeaway ? fonts.bodyExtraBold : fonts.bodyBold, color: takeaway ? '#FFFFFF' : colors.ink900 }}>Takeaway</Text>
+            <Text style={{ fontSize: 13, fontFamily: takeaway && !delivery ? fonts.bodyExtraBold : fonts.bodyBold, color: takeaway && !delivery ? '#FFFFFF' : colors.ink900 }}>Takeaway</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => { setTakeaway(true); setDelivery(true); }}
+            style={{ flex: 1, height: 44, borderRadius: radius.pill, backgroundColor: delivery ? colors.ink900 : colors.surface, borderWidth: delivery ? 0 : 1.5, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Text style={{ fontSize: 13, fontFamily: delivery ? fonts.bodyExtraBold : fonts.bodyBold, color: delivery ? '#FFFFFF' : colors.ink900 }}>Delivery</Text>
           </Pressable>
         </View>
 
@@ -190,6 +208,36 @@ function NewOrderScreen() {
               );
             })}
           </ScrollView>
+        ) : null}
+
+        {takeaway ? (
+          <>
+            <TextInput
+              value={custPhone}
+              onChangeText={setCustPhone}
+              placeholder={delivery ? 'Customer phone (required)' : 'Customer phone (optional, for loyalty points)'}
+              placeholderTextColor={colors.ink500}
+              keyboardType="phone-pad"
+              style={{ height: 48, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.inputBorder, paddingHorizontal: 16, color: colors.ink900 }}
+            />
+            <TextInput
+              value={custName}
+              onChangeText={setCustName}
+              placeholder="Customer name (optional)"
+              placeholderTextColor={colors.ink500}
+              style={{ height: 48, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.inputBorder, paddingHorizontal: 16, color: colors.ink900 }}
+            />
+            {delivery ? (
+              <TextInput
+                value={address}
+                onChangeText={setAddress}
+                placeholder="Delivery address (required)"
+                placeholderTextColor={colors.ink500}
+                multiline
+                style={{ minHeight: 70, borderRadius: 20, backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.inputBorder, paddingHorizontal: 16, paddingTop: 12, color: colors.ink900 }}
+              />
+            ) : null}
+          </>
         ) : null}
 
         {!takeaway ? (

@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Linking, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon, type IconName } from '@/components/Icon';
@@ -9,7 +9,7 @@ import { supabase } from '@/lib/supabase';
 import { colors, fonts, formatMinor, radius, shadow } from '@/theme/tokens';
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
-type Customer = { id: string; name: string | null; phone: string | null; email: string | null; created_at: string; staff_notes: string | null; points_balance: number; birthday: string | null };
+type Customer = { id: string; name: string | null; phone: string | null; email: string | null; created_at: string; staff_notes: string | null; points_balance: number; birthday: string | null; credit_limit_minor: number; account_balance_minor: number };
 type OrderRow = { id: string; order_number: string; order_status: string; total_minor: number; created_at: string; table: { label: string } | null };
 type Favorite = { name: string; count: number };
 
@@ -30,10 +30,12 @@ function CustomerDetailScreen() {
   const [notes, setNotes] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
   const [birthday, setBirthday] = useState('');
+  const [limit, setLimit] = useState('');
+  const [payAmount, setPayAmount] = useState('');
 
   const load = useCallback(async () => {
     const [{ data: c }, { data: os }] = await Promise.all([
-      supabase.from('customers').select('id, name, phone, email, created_at, staff_notes, points_balance, birthday').eq('id', id).maybeSingle(),
+      supabase.from('customers').select('id, name, phone, email, created_at, staff_notes, points_balance, birthday, credit_limit_minor, account_balance_minor').eq('id', id).maybeSingle(),
       supabase
         .from('orders')
         .select('id, order_number, order_status, total_minor, created_at, table:restaurant_tables(label)')
@@ -43,6 +45,7 @@ function CustomerDetailScreen() {
     setCustomer(c);
     setNotes(c?.staff_notes ?? '');
     setBirthday(c?.birthday ?? '');
+    setLimit(c ? String(c.credit_limit_minor / 100) : '');
     setOrders((os as unknown as OrderRow[]) ?? []);
 
     const orderIds = (os ?? []).map((o) => o.id);
@@ -156,6 +159,70 @@ function CustomerDetailScreen() {
             value={customer.email ?? 'No email on file'}
             style={{ borderRadius: 14, borderWidth: 1.5, borderColor: '#E4D8D0', padding: 12, fontSize: 15, backgroundColor: '#FFFBF8', color: colors.ink900, fontFamily: fonts.body }}
           />
+        </View>
+
+        <View style={{ backgroundColor: colors.surface, borderRadius: 22, borderWidth: 1, borderColor: '#F4ECE6', padding: 16, gap: 10 }}>
+          <Text style={{ fontSize: 18, fontFamily: fonts.display, color: colors.ink900 }}>House account</Text>
+          <Text style={{ fontSize: 14, color: colors.ink700 }}>
+            Owes {(customer.account_balance_minor / 100).toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 })} · limit {(customer.credit_limit_minor / 100).toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 })}
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TextInput
+              value={limit}
+              onChangeText={setLimit}
+              placeholder="Credit limit (₹)"
+              placeholderTextColor={colors.ink500}
+              keyboardType="number-pad"
+              style={{ flex: 1, height: 46, borderRadius: 14, borderWidth: 1.5, borderColor: colors.inputBorder, paddingHorizontal: 14, color: colors.ink900 }}
+            />
+            <Pressable
+              onPress={async () => {
+                const v = Math.round(Number(limit) * 100);
+                if (!Number.isFinite(v) || v < 0) return;
+                const { error } = await supabase.rpc('set_credit_limit', { p_customer: id, p_limit_minor: v });
+                if (error) Alert.alert('Could not save', error.message);
+                else load();
+              }}
+              style={{ height: 46, paddingHorizontal: 16, borderRadius: 14, backgroundColor: colors.ink900, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={{ color: '#FFFFFF', fontFamily: fonts.bodyExtraBold }}>Set</Text>
+            </Pressable>
+          </View>
+          {customer.account_balance_minor > 0 ? (
+            <>
+              <TextInput
+                value={payAmount}
+                onChangeText={setPayAmount}
+                placeholder="Amount received (₹)"
+                placeholderTextColor={colors.ink500}
+                keyboardType="number-pad"
+                style={{ height: 46, borderRadius: 14, borderWidth: 1.5, borderColor: colors.inputBorder, paddingHorizontal: 14, color: colors.ink900 }}
+              />
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {(['cash', 'upi', 'card'] as const).map((m) => (
+                  <Pressable
+                    key={m}
+                    onPress={async () => {
+                      const v = Math.round(Number(payAmount) * 100);
+                      if (!Number.isFinite(v) || v <= 0) {
+                        Alert.alert('Enter the amount received');
+                        return;
+                      }
+                      const { error } = await supabase.rpc('settle_account', { p_customer: id, p_amount_minor: v, p_method: m });
+                      if (error) Alert.alert('Could not record', error.message === 'invalid_amount' ? 'That is more than the customer owes.' : error.message);
+                      else {
+                        setPayAmount('');
+                        load();
+                      }
+                    }}
+                    style={{ flex: 1, height: 42, borderRadius: 21, backgroundColor: colors.coral600, alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontFamily: fonts.bodyExtraBold }}>Received {m.toUpperCase()}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </>
+          ) : null}
         </View>
 
         <View style={{ backgroundColor: colors.surface, borderRadius: 22, borderWidth: 1, borderColor: '#F4ECE6', padding: 16, gap: 10 }}>

@@ -1,6 +1,6 @@
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Alert, Linking, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BillPreviewSheet } from '@/components/BillPreviewSheet';
@@ -39,6 +39,11 @@ type OrderDetailData = {
   currency: string;
   created_at: string;
   table: { label: string } | null;
+  order_type: 'dine_in' | 'takeaway' | 'delivery';
+  delivery_address: string | null;
+  delivery_phone: string | null;
+  delivery_status: 'pending' | 'out' | 'delivered' | null;
+  delivery_fee_minor: number;
   items: OrderItem[];
 };
 
@@ -85,7 +90,7 @@ function OrderDetailScreen() {
     const { data } = await supabase
       .from('orders')
       .select(
-        'id, order_number, order_status, payment_status, total_minor, priority, customer:customers(id, name, phone, points_balance), currency, created_at, table:restaurant_tables(label), items:order_items(id, item_name_snapshot, quantity, line_total_minor, variant_snapshot, addon_snapshot, voided_at, void_reason, added_after_kot)',
+        'id, order_number, order_status, payment_status, total_minor, priority, order_type, delivery_address, delivery_phone, delivery_status, delivery_fee_minor, customer:customers(id, name, phone, points_balance), currency, created_at, table:restaurant_tables(label), items:order_items(id, item_name_snapshot, quantity, line_total_minor, variant_snapshot, addon_snapshot, voided_at, void_reason, added_after_kot)',
       )
       .eq('id', id)
       .single();
@@ -239,6 +244,32 @@ function OrderDetailScreen() {
     load();
   }
 
+  async function deliveryStep(fn: 'dispatch_delivery' | 'complete_delivery') {
+    if (!order) return;
+    const { error } = await supabase.rpc(fn, { p_order_id: order.id });
+    if (error) Alert.alert('Could not update delivery', error.message === 'not_ready_to_dispatch' ? 'The kitchen has not marked this order ready yet.' : error.message);
+    else load();
+  }
+
+  function chargeToAccount() {
+    if (!order) return;
+    Alert.alert('Charge to house account?', 'The bill is settled now and the amount is added to this customer\'s account balance, to be paid later.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Charge',
+        onPress: async () => {
+          const { error } = await supabase.rpc('charge_to_account', { p_order_id: order.id });
+          if (error) {
+            Alert.alert(
+              'Could not charge',
+              error.message === 'credit_limit_exceeded' ? 'This would go over the customer\'s credit limit. Set a higher limit on their profile first.' : error.message,
+            );
+          } else load();
+        },
+      },
+    ]);
+  }
+
   const canSetRush = !!order && ['new', 'accepted', 'preparing', 'ready'].includes(order.order_status) &&
     !!(membership?.permissions.has('orders.edit') || membership?.permissions.has('orders.status.update') || membership?.permissions.has('orders.accept'));
 
@@ -372,6 +403,19 @@ function OrderDetailScreen() {
             Payment: {order.payment_status}
           </Text>
         )}
+        {order && order.order_type === 'delivery' ? (
+          <View style={{ backgroundColor: colors.infoBg, borderRadius: 18, padding: 14, gap: 4 }}>
+            <Text style={{ fontSize: 12, fontFamily: fonts.bodyExtraBold, color: colors.info, letterSpacing: 0.6 }}>
+              DELIVERY · {(order.delivery_status ?? 'pending').toUpperCase()}
+            </Text>
+            <Text style={{ fontSize: 14, color: colors.ink900 }}>{order.delivery_address}</Text>
+            {order.delivery_phone ? <Text style={{ fontSize: 13, color: colors.ink700 }} onPress={() => Linking.openURL(`tel:${order.delivery_phone}`)}>Call {order.delivery_phone}</Text> : null}
+            {order.delivery_fee_minor > 0 ? <Text style={{ fontSize: 12, color: colors.ink700 }}>Delivery fee {formatMinor(order.delivery_fee_minor, order.currency)}</Text> : null}
+          </View>
+        ) : null}
+        {order && order.order_type === 'delivery' && order.delivery_status === 'pending' && order.order_status === 'ready' ? <Button title="Out for delivery" onPress={() => deliveryStep('dispatch_delivery')} /> : null}
+        {order && order.order_type === 'delivery' && order.delivery_status === 'out' ? <Button title="Mark delivered" onPress={() => deliveryStep('complete_delivery')} /> : null}
+        {order && order.customer && ['unpaid', 'pending'].includes(order.payment_status) && !['rejected', 'cancelled'].includes(order.order_status) && membership?.permissions.has('payments.cash.record') ? <Button title="Charge to house account" variant="outline" onPress={chargeToAccount} /> : null}
         {loyaltyOn && order && ['unpaid', 'pending'].includes(order.payment_status) && !['rejected', 'cancelled'].includes(order.order_status) && (membership?.permissions.has('payments.cash.record') || membership?.permissions.has('orders.edit')) ? <Button title={order.customer ? `Points: ${order.customer.points_balance}` : 'Add customer for points'} variant="outline" onPress={() => setLoyaltyOpen(true)} /> : null}
         {canSetRush ? <Button title={order.priority === 'rush' ? 'Remove RUSH priority' : 'Mark as RUSH'} variant="outline" onPress={toggleRush} /> : null}
         {canEditItems ? <Button title="Add items" variant="outline" onPress={() => router.push(`/(staff)/orders/new?orderId=${order.id}` as never)} /> : null}

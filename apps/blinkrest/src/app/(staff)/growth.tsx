@@ -39,6 +39,9 @@ function GrowthScreen() {
   const [enabled, setEnabled] = useState(false);
   const [earn, setEarn] = useState('1');
   const [value, setValue] = useState('1');
+  const [takeawayPct, setTakeawayPct] = useState('0');
+  const [deliveryPct, setDeliveryPct] = useState('0');
+  const [deliveryFee, setDeliveryFee] = useState('0');
 
   const load = useCallback(async () => {
     if (!membership) return;
@@ -53,6 +56,10 @@ function GrowthScreen() {
     setEnabled(!!cfg?.enabled);
     setEarn(String(cfg?.earn_per_100 ?? 1));
     setValue(String((cfg?.point_value_minor ?? 100) / 100));
+    const ch = (t?.settings as { channel_pricing?: { takeaway_percent?: number; delivery_percent?: number; delivery_fee_minor?: number } } | null)?.channel_pricing;
+    setTakeawayPct(String(ch?.takeaway_percent ?? 0));
+    setDeliveryPct(String(ch?.delivery_percent ?? 0));
+    setDeliveryFee(String((ch?.delivery_fee_minor ?? 0) / 100));
   }, [membership]);
 
   useEffect(() => {
@@ -76,6 +83,16 @@ function GrowthScreen() {
     await supabase.from('campaign_sends').insert({ tenant_id: membership.tenantId, campaign, customer_id: c.customer_id, sent_by: membership.id });
     setSent((prev) => new Set(prev).add(c.customer_id));
     Linking.openURL(`https://wa.me/91${digits}?text=${encodeURIComponent(text)}`).catch(() => Alert.alert('Could not open WhatsApp', 'Make sure WhatsApp is installed.'));
+  }
+
+  async function saveChannels() {
+    const { error } = await supabase.rpc('set_channel_pricing', {
+      p_takeaway_percent: Number(takeawayPct) || 0,
+      p_delivery_percent: Number(deliveryPct) || 0,
+      p_delivery_fee_minor: Math.round((Number(deliveryFee) || 0) * 100),
+    });
+    if (error) Alert.alert('Could not save', error.message);
+    else Alert.alert('Saved', 'New takeaway and delivery orders use these prices.');
   }
 
   async function saveLoyalty() {
@@ -150,6 +167,19 @@ function GrowthScreen() {
               A ₹1,000 bill earns {Math.floor(10 * (Number(earn) || 0))} points, worth {rupees(Math.floor(10 * (Number(earn) || 0)) * Math.round((Number(value) || 0) * 100), 0)} on a later bill.
             </Text>
             {canSettings ? <Button label="Save" onPress={saveLoyalty} /> : <Text style={{ fontSize: 12, color: colors.ink500 }}>Only the owner can change loyalty settings.</Text>}
+          </View>
+        ) : null}
+
+        {tab === 'loyalty' ? (
+          <View style={card}>
+            <Text style={{ fontSize: 16, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>Takeaway and delivery pricing</Text>
+            <Text style={{ fontSize: 13, color: colors.ink700 }}>
+              Add a percentage on top of dine-in prices for orders entered as takeaway or delivery (for example 10 to cover packaging or aggregator commission). Use a minus sign for a discount. Guests ordering through the QR menu are not affected.
+            </Text>
+            <Field label="Takeaway price change (%)" value={takeawayPct} onChangeText={setTakeawayPct} keyboardType="numbers-and-punctuation" />
+            <Field label="Delivery price change (%)" value={deliveryPct} onChangeText={setDeliveryPct} keyboardType="numbers-and-punctuation" />
+            <Field label="Delivery fee (₹)" value={deliveryFee} onChangeText={setDeliveryFee} keyboardType="decimal-pad" />
+            {canSettings ? <Button label="Save pricing" onPress={saveChannels} /> : null}
           </View>
         ) : null}
 
