@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BillPreviewSheet } from '@/components/BillPreviewSheet';
 import { Button } from '@/components/Button';
+import { Button as SheetButton, Field, Sheet } from '@/components/inventory/ui';
 import { RequireAccess } from '@/components/RequireAccess';
 import { TextField } from '@/components/TextField';
 import { useAuth } from '@/hooks/useAuth';
@@ -34,6 +35,7 @@ type OrderDetailData = {
   payment_status: string;
   total_minor: number;
   priority: 'normal' | 'rush';
+  customer: { id: string; name: string | null; phone: string | null; points_balance: number } | null;
   currency: string;
   created_at: string;
   table: { label: string } | null;
@@ -59,6 +61,18 @@ function OrderDetailScreen() {
   const [voidReason, setVoidReason] = useState('');
   const [voidBusy, setVoidBusy] = useState(false);
   const [voidPin, setVoidPin] = useState('');
+  const [loyaltyOn, setLoyaltyOn] = useState(false);
+  const [loyaltyOpen, setLoyaltyOpen] = useState(false);
+  const [custPhone, setCustPhone] = useState('');
+  const [custName, setCustName] = useState('');
+  const [redeemPoints, setRedeemPoints] = useState('');
+
+  useEffect(() => {
+    if (!membership) return;
+    supabase.from('tenants').select('settings').eq('id', membership.tenantId).maybeSingle().then(({ data }) => {
+      setLoyaltyOn(!!(data?.settings as { loyalty?: { enabled?: boolean } } | null)?.loyalty?.enabled);
+    });
+  }, [membership]);
   // Kitchen staff only prepare food: no bills, receipts or printing.
   const canSeeBill = !!(membership?.permissions.has('payments.view') || membership?.permissions.has('payments.cash.collect') || membership?.permissions.has('orders.create'));
   const [discountRequest, setDiscountRequest] = useState<DiscountRequest | null>(null);
@@ -71,7 +85,7 @@ function OrderDetailScreen() {
     const { data } = await supabase
       .from('orders')
       .select(
-        'id, order_number, order_status, payment_status, total_minor, priority, currency, created_at, table:restaurant_tables(label), items:order_items(id, item_name_snapshot, quantity, line_total_minor, variant_snapshot, addon_snapshot, voided_at, void_reason, added_after_kot)',
+        'id, order_number, order_status, payment_status, total_minor, priority, customer:customers(id, name, phone, points_balance), currency, created_at, table:restaurant_tables(label), items:order_items(id, item_name_snapshot, quantity, line_total_minor, variant_snapshot, addon_snapshot, voided_at, void_reason, added_after_kot)',
       )
       .eq('id', id)
       .single();
@@ -191,6 +205,37 @@ function OrderDetailScreen() {
     if ((data as { status?: string } | null)?.status === 'pending_approval') {
       Alert.alert('Sent for approval', 'A manager has to approve removing this item.');
     }
+    load();
+  }
+
+  async function attachCustomer() {
+    if (!order) return;
+    const { error } = await supabase.rpc('attach_customer_to_order', { p_order_id: order.id, p_phone: custPhone, p_name: custName || null });
+    if (error) {
+      Alert.alert('Could not add customer', error.message === 'invalid_phone' ? 'Enter a 10-digit phone number.' : error.message);
+      return;
+    }
+    setCustPhone('');
+    setCustName('');
+    load();
+  }
+
+  async function redeem() {
+    if (!order) return;
+    const n = Math.floor(Number(redeemPoints));
+    if (!Number.isFinite(n) || n <= 0) {
+      Alert.alert('Enter points', 'How many points does the guest want to use?');
+      return;
+    }
+    const { data, error } = await supabase.rpc('redeem_points', { p_order_id: order.id, p_points: n });
+    if (error) {
+      Alert.alert('Could not redeem', error.message === 'invalid_points' ? 'The guest does not have that many points.' : error.message);
+      return;
+    }
+    const res = data as { points_used: number; discount_minor: number };
+    setRedeemPoints('');
+    setLoyaltyOpen(false);
+    Alert.alert('Points redeemed', `${res.points_used} points took ${formatMinor(res.discount_minor, order.currency)} off the bill.`);
     load();
   }
 
@@ -327,11 +372,30 @@ function OrderDetailScreen() {
             Payment: {order.payment_status}
           </Text>
         )}
+        {loyaltyOn && order && ['unpaid', 'pending'].includes(order.payment_status) && !['rejected', 'cancelled'].includes(order.order_status) && (membership?.permissions.has('payments.cash.record') || membership?.permissions.has('orders.edit')) ? <Button title={order.customer ? `Points: ${order.customer.points_balance}` : 'Add customer for points'} variant="outline" onPress={() => setLoyaltyOpen(true)} /> : null}
         {canSetRush ? <Button title={order.priority === 'rush' ? 'Remove RUSH priority' : 'Mark as RUSH'} variant="outline" onPress={toggleRush} /> : null}
         {canEditItems ? <Button title="Add items" variant="outline" onPress={() => router.push(`/(staff)/orders/new?orderId=${order.id}` as never)} /> : null}
         {canSeeBill ? <Button title="Check bill" variant="outline" onPress={() => setBillOpen(true)} /> : null}
       </View>
     </ScrollView>
+
+    <Sheet visible={loyaltyOpen} title="Customer & points" onClose={() => setLoyaltyOpen(false)}>
+      {order?.customer ? (
+        <>
+          <Text style={{ fontSize: 15, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>{order.customer.name ?? order.customer.phone}</Text>
+          <Text style={{ fontSize: 13, color: colors.ink700 }}>{order.customer.points_balance} points available</Text>
+          <Field label="Points to use on this bill" value={redeemPoints} onChangeText={setRedeemPoints} keyboardType="number-pad" />
+          <SheetButton label="Redeem points" onPress={redeem} disabled={order.customer.points_balance <= 0} />
+        </>
+      ) : (
+        <>
+          <Text style={{ fontSize: 13, color: colors.ink700 }}>Add the guest&apos;s phone number so this bill earns points.</Text>
+          <Field label="Phone number" value={custPhone} onChangeText={setCustPhone} keyboardType="phone-pad" />
+          <Field label="Name (optional)" value={custName} onChangeText={setCustName} />
+          <SheetButton label="Add customer" onPress={attachCustomer} />
+        </>
+      )}
+    </Sheet>
 
     <Modal visible={voiding !== null} transparent animationType="fade" onRequestClose={() => setVoiding(null)}>
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', padding: 24 }}>

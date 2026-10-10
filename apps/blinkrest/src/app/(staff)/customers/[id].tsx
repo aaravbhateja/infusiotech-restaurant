@@ -9,7 +9,7 @@ import { supabase } from '@/lib/supabase';
 import { colors, fonts, formatMinor, radius, shadow } from '@/theme/tokens';
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
-type Customer = { id: string; name: string | null; phone: string | null; email: string | null; created_at: string; staff_notes: string | null };
+type Customer = { id: string; name: string | null; phone: string | null; email: string | null; created_at: string; staff_notes: string | null; points_balance: number; birthday: string | null };
 type OrderRow = { id: string; order_number: string; order_status: string; total_minor: number; created_at: string; table: { label: string } | null };
 type Favorite = { name: string; count: number };
 
@@ -29,10 +29,11 @@ function CustomerDetailScreen() {
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [notes, setNotes] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
+  const [birthday, setBirthday] = useState('');
 
   const load = useCallback(async () => {
     const [{ data: c }, { data: os }] = await Promise.all([
-      supabase.from('customers').select('id, name, phone, email, created_at, staff_notes').eq('id', id).maybeSingle(),
+      supabase.from('customers').select('id, name, phone, email, created_at, staff_notes, points_balance, birthday').eq('id', id).maybeSingle(),
       supabase
         .from('orders')
         .select('id, order_number, order_status, total_minor, created_at, table:restaurant_tables(label)')
@@ -41,6 +42,7 @@ function CustomerDetailScreen() {
     ]);
     setCustomer(c);
     setNotes(c?.staff_notes ?? '');
+    setBirthday(c?.birthday ?? '');
     setOrders((os as unknown as OrderRow[]) ?? []);
 
     const orderIds = (os ?? []).map((o) => o.id);
@@ -154,6 +156,29 @@ function CustomerDetailScreen() {
             value={customer.email ?? 'No email on file'}
             style={{ borderRadius: 14, borderWidth: 1.5, borderColor: '#E4D8D0', padding: 12, fontSize: 15, backgroundColor: '#FFFBF8', color: colors.ink900, fontFamily: fonts.body }}
           />
+        </View>
+
+        <View style={{ backgroundColor: colors.surface, borderRadius: 22, borderWidth: 1, borderColor: '#F4ECE6', padding: 16, gap: 10 }}>
+          <Text style={{ fontSize: 18, fontFamily: fonts.display, color: colors.ink900 }}>Loyalty & dates</Text>
+          <Text style={{ fontSize: 14, color: colors.ink700 }}>{customer.points_balance} loyalty points</Text>
+          <TextInput
+            value={birthday}
+            onChangeText={setBirthday}
+            placeholder="Birthday (YYYY-MM-DD)"
+            placeholderTextColor={colors.ink500}
+            style={{ height: 46, borderRadius: 14, borderWidth: 1.5, borderColor: colors.inputBorder, paddingHorizontal: 14, color: colors.ink900 }}
+          />
+          <Pressable
+            onPress={async () => {
+              const ok = birthday.trim() === '' || /^\d{4}-\d{2}-\d{2}$/.test(birthday.trim());
+              if (!ok) return;
+              await supabase.from('customers').update({ birthday: birthday.trim() || null }).eq('id', id);
+              load();
+            }}
+            style={{ alignSelf: 'flex-end', height: 40, paddingHorizontal: 16, borderRadius: radius.pill, backgroundColor: colors.ink900, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Text style={{ color: '#FFFFFF', fontFamily: fonts.bodyExtraBold }}>Save</Text>
+          </Pressable>
         </View>
 
         <View style={{ backgroundColor: colors.surface, borderRadius: 22, borderWidth: 1, borderColor: '#F4ECE6', padding: 16, gap: 10 }}>
