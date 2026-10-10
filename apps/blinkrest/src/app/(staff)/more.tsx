@@ -27,6 +27,7 @@ function initials(text: string) {
 const TILES: { label: string; sub: string; icon: IconName; bg: string; fg: string; permission?: string }[] = [
   { label: 'Staff', sub: 'Manage team', icon: 'users', bg: '#EAF1FF', fg: '#1F5BD6', permission: 'staff.view' },
   { label: 'Customers', sub: 'CRM', icon: 'user', bg: colors.coral50, fg: colors.coral600, permission: 'customers.view' },
+  { label: 'Reservations', sub: 'Bookings & waitlist', icon: 'calendar', bg: colors.saffron50, fg: '#8A5A00', permission: 'tables.view' },
   { label: 'Growth', sub: 'Loyalty & offers', icon: 'percent', bg: colors.coral50, fg: colors.coral600, permission: 'customers.view' },
   { label: 'Insights', sub: 'Menu & forecast', icon: 'sparkle', bg: '#F1EBFF', fg: '#5B21B6', permission: 'analytics.advanced.view' },
   { label: 'Roster', sub: 'Weekly shifts', icon: 'calendar', bg: '#EAF1FF', fg: '#1F5BD6', permission: 'staff.view' },
@@ -149,6 +150,7 @@ export default function More() {
                   else if (t.label === 'Reports') router.push('/(staff)/reports' as never);
                   else if (t.label === 'Roster') router.push('/(staff)/roster' as never);
                   else if (t.label === 'Insights') router.push('/(staff)/insights' as never);
+                  else if (t.label === 'Reservations') router.push('/(staff)/reservations' as never);
                   else if (t.label === 'Growth') router.push('/(staff)/growth' as never);
                   else if (t.label === 'Approval PIN') setPinOpen(true);
                   else if (t.label === 'Customers') router.push('/(staff)/customers' as never);

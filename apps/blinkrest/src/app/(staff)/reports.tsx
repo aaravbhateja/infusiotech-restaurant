@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AccountingExport } from '@/components/AccountingExport';
 import { Icon } from '@/components/Icon';
 import { Button, Chip, Field, Sheet, card, heading, rupees } from '@/components/inventory/ui';
 import { RequireAccess } from '@/components/RequireAccess';
@@ -15,6 +16,7 @@ const TABS = [
   ['pay', 'Payments'],
   ['ctl', 'Controls'],
   ['staff', 'Staff'],
+  ['acct', 'Accounting'],
 ] as const;
 
 const RANGES = [
@@ -233,6 +235,8 @@ function ReportsScreen() {
             ) : null}
           </>
         ) : null}
+
+        {tab === 'acct' ? <AccountingExport /> : null}
 
         {tab === 'staff' ? (
           <>

@@ -27,6 +27,28 @@ export async function shareCsv(filename: string, csv: string, dialogTitle?: stri
   await Sharing.shareAsync(file.uri, { dialogTitle, mimeType: 'text/csv', UTI: 'public.comma-separated-values-text' });
 }
 
+// Same as shareCsv for any text file (e.g. Tally XML).
+export async function shareText(filename: string, text: string, mimeType: string, dialogTitle?: string) {
+  if (Platform.OS === 'web') {
+    const blob = new Blob([text], { type: `${mimeType};charset=utf-8` });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    return;
+  }
+  const file = new File(Paths.cache, filename);
+  if (file.exists) file.delete();
+  file.create();
+  file.write(text);
+  if (!(await Sharing.isAvailableAsync())) throw new Error('Sharing is not available on this device.');
+  await Sharing.shareAsync(file.uri, { dialogTitle, mimeType });
+}
+
 // Web only: let the user pick a .csv file and return its text.
 export function pickCsvFileWeb(): Promise<string | null> {
   return new Promise((resolve) => {
