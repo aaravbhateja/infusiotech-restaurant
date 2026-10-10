@@ -36,6 +36,10 @@ enable_signup = true
 [functions.razorpay-webhook]
 verify_jwt = false
 
+# The public API authenticates callers itself with BlinkRest API keys (brk_...).
+[functions.public-api]
+verify_jwt = false
+
 [auth.email]
 enable_signup = true
 enable_confirmations = true

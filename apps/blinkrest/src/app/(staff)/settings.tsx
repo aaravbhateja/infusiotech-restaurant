@@ -48,6 +48,7 @@ const GROUPS: { title: string; rows: Row[] }[] = [
     title: 'TEAM & ACCOUNT',
     rows: [
       { label: 'Staff', sub: 'Team, invites, role templates', icon: 'users', bg: '#F1EBFF', fg: '#5B21B6', route: '/(staff)/staff' },
+      { label: 'Integrations', sub: 'Webhooks and API keys', icon: 'shield', bg: '#F1EBFF', fg: '#5B21B6', route: '/(staff)/settings/integrations' },
       { label: 'Security', sub: 'Signed-in devices', icon: 'shield', bg: '#F1EBFF', fg: '#5B21B6', route: '/(staff)/settings/security' },
       { label: 'Notifications', sub: 'Orders, payments, staff, system', icon: 'bell', bg: '#F1EBFF', fg: '#5B21B6', route: '/(staff)/notifications' },
       { label: 'Help & support', sub: 'FAQs, tickets, call us', icon: 'help', bg: '#F1EBFF', fg: '#5B21B6', route: '/(staff)/support' },
