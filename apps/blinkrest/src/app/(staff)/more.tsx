@@ -26,6 +26,7 @@ function initials(text: string) {
 const TILES: { label: string; sub: string; icon: IconName; bg: string; fg: string; permission?: string }[] = [
   { label: 'Staff', sub: 'Manage team', icon: 'users', bg: '#EAF1FF', fg: '#1F5BD6', permission: 'staff.view' },
   { label: 'Customers', sub: 'CRM', icon: 'user', bg: colors.coral50, fg: colors.coral600, permission: 'customers.view' },
+  { label: 'Reports', sub: 'Profit & controls', icon: 'chart', bg: colors.successBg, fg: colors.success, permission: 'reports.financial.view' },
   { label: 'Inventory', sub: 'Stock & recipes', icon: 'list', bg: colors.saffron50, fg: '#8A5A00', permission: 'inventory.view' },
   { label: 'Analytics', sub: 'Reports', icon: 'chart', bg: '#F1EBFF', fg: '#5B21B6', permission: 'analytics.basic.view' },
   { label: 'Payments', sub: 'Ledger', icon: 'card', bg: colors.successBg, fg: colors.success, permission: 'payments.view' },
@@ -139,6 +140,7 @@ export default function More() {
                   if (t.label === 'Staff') router.push('/(staff)/staff' as never);
                   else if (t.label === 'Analytics') router.push('/(staff)/analytics' as never);
                   else if (t.label === 'Inventory') router.push('/(staff)/inventory' as never);
+                  else if (t.label === 'Reports') router.push('/(staff)/reports' as never);
                   else if (t.label === 'Customers') router.push('/(staff)/customers' as never);
                   else if (t.label === 'Payments') router.push('/(staff)/payments' as never);
                   else if (t.label === 'Offers') router.push('/(staff)/offers' as never);
