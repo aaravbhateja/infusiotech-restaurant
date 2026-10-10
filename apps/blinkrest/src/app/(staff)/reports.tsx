@@ -42,6 +42,7 @@ type Loss = {
   voids_by_staff: { name: string; count: number; value_minor: number }[]; top_void_reasons: { reason: string; count: number }[];
 };
 type StaffRow = { name: string; role: string; orders_served: number; collected_minor: number; voids: number; refunds: number; reprints: number; actions: number };
+type Attendance = { name: string; role: string; days_worked: number; shifts: number; worked_minutes: number; break_minutes: number; net_minutes: number; on_shift_now: boolean };
 type Expense = { id: string; category: string; amount_minor: number; expense_date: string; note: string | null; paid_via: string };
 
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -55,6 +56,7 @@ function ReportsScreen() {
   const [recon, setRecon] = useState<Recon | null>(null);
   const [loss, setLoss] = useState<Loss | null>(null);
   const [staff, setStaff] = useState<StaffRow[]>([]);
+  const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
 
   const [adding, setAdding] = useState(false);
@@ -68,18 +70,20 @@ function ReportsScreen() {
     const from = new Date();
     from.setDate(from.getDate() - (days - 1));
     const args = { p_from: ymd(from), p_to: ymd(to) };
-    const [p, r, l, s, e] = await Promise.all([
+    const [p, r, l, s, e, a] = await Promise.all([
       supabase.rpc('profit_loss', args),
       supabase.rpc('payment_reconciliation', args),
       supabase.rpc('loss_prevention', args),
       supabase.rpc('staff_activity', args),
       supabase.from('expenses').select('id, category, amount_minor, expense_date, note, paid_via').gte('expense_date', args.p_from).lte('expense_date', args.p_to).order('expense_date', { ascending: false }),
+      supabase.rpc('attendance_report', args),
     ]);
     setPnl((p.data as Pnl) ?? null);
     setRecon((r.data as Recon) ?? null);
     setLoss((l.data as Loss) ?? null);
     setStaff((s.data as StaffRow[]) ?? []);
     setExpenses((e.data as Expense[]) ?? []);
+    setAttendance((a.data as Attendance[]) ?? []);
   }, [days]);
 
   useEffect(() => {
@@ -244,6 +248,20 @@ function ReportsScreen() {
               </View>
             ))}
             {staff.length === 0 ? <Text style={{ color: colors.ink500 }}>No staff activity yet.</Text> : null}
+
+            <Text style={[heading, { marginTop: 8 }]}>ATTENDANCE (SHIFT HOURS)</Text>
+            {attendance.map((a) => (
+              <View key={a.name + a.role} style={card}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text style={{ flex: 1, fontSize: 15, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>{a.name}</Text>
+                  {a.on_shift_now ? <Text style={{ fontSize: 11, fontFamily: fonts.bodyExtraBold, color: colors.success }}>ON SHIFT</Text> : null}
+                </View>
+                <Text style={{ fontSize: 13, color: colors.ink700 }}>
+                  {a.days_worked} days · {a.shifts} shifts · {Math.floor(a.net_minutes / 60)}h {Math.round(a.net_minutes % 60)}m worked · {Math.round(a.break_minutes)} min on breaks
+                </Text>
+              </View>
+            ))}
+            {attendance.length === 0 ? <Text style={{ color: colors.ink500 }}>No shifts recorded in this period.</Text> : null}
           </>
         ) : null}
       </ScrollView>

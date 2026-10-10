@@ -4,6 +4,7 @@ import { Alert, Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BottomNav } from '@/components/BottomNav';
+import { ApprovalPinSheet } from '@/components/ApprovalPinSheet';
 import { Icon, type IconName } from '@/components/Icon';
 import { useAuth } from '@/hooks/useAuth';
 import { unregisterPushToken } from '@/hooks/usePushNotifications';
@@ -26,6 +27,8 @@ function initials(text: string) {
 const TILES: { label: string; sub: string; icon: IconName; bg: string; fg: string; permission?: string }[] = [
   { label: 'Staff', sub: 'Manage team', icon: 'users', bg: '#EAF1FF', fg: '#1F5BD6', permission: 'staff.view' },
   { label: 'Customers', sub: 'CRM', icon: 'user', bg: colors.coral50, fg: colors.coral600, permission: 'customers.view' },
+  { label: 'Roster', sub: 'Weekly shifts', icon: 'calendar', bg: '#EAF1FF', fg: '#1F5BD6', permission: 'staff.view' },
+  { label: 'Approval PIN', sub: 'For voids & refunds', icon: 'shield', bg: colors.errorBg, fg: colors.error, permission: 'orders.void' },
   { label: 'Reports', sub: 'Profit & controls', icon: 'chart', bg: colors.successBg, fg: colors.success, permission: 'reports.financial.view' },
   { label: 'Inventory', sub: 'Stock & recipes', icon: 'list', bg: colors.saffron50, fg: '#8A5A00', permission: 'inventory.view' },
   { label: 'Analytics', sub: 'Reports', icon: 'chart', bg: '#F1EBFF', fg: '#5B21B6', permission: 'analytics.basic.view' },
@@ -46,6 +49,7 @@ const ROWS: { label: string; icon: IconName; permission?: string; danger?: boole
 
 export default function More() {
   const { membership, memberships } = useAuth();
+  const [pinOpen, setPinOpen] = useState(false);
   const [planName, setPlanName] = useState<string | null>(null);
   const [logoPath, setLogoPath] = useState<string | null>(null);
 
@@ -141,6 +145,8 @@ export default function More() {
                   else if (t.label === 'Analytics') router.push('/(staff)/analytics' as never);
                   else if (t.label === 'Inventory') router.push('/(staff)/inventory' as never);
                   else if (t.label === 'Reports') router.push('/(staff)/reports' as never);
+                  else if (t.label === 'Roster') router.push('/(staff)/roster' as never);
+                  else if (t.label === 'Approval PIN') setPinOpen(true);
                   else if (t.label === 'Customers') router.push('/(staff)/customers' as never);
                   else if (t.label === 'Payments') router.push('/(staff)/payments' as never);
                   else if (t.label === 'Offers') router.push('/(staff)/offers' as never);
@@ -222,6 +228,7 @@ export default function More() {
         </Text>
       </ScrollView>
       <BottomNav active="more" />
+      <ApprovalPinSheet visible={pinOpen} onClose={() => setPinOpen(false)} />
     </SafeAreaView>
   );
 }

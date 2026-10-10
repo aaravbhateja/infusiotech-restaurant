@@ -32,6 +32,7 @@ function PaymentDetailScreen() {
   const [refunding, setRefunding] = useState(false);
   const [refundReason, setRefundReason] = useState('');
   const [refundBusy, setRefundBusy] = useState(false);
+  const [refundPin, setRefundPin] = useState('');
 
   const load = useCallback(async () => {
     const { data: p } = await supabase
@@ -58,6 +59,24 @@ function PaymentDetailScreen() {
       return;
     }
     setRefundBusy(true);
+    if (refundPin.trim() && !membership?.permissions.has('payments.refund')) {
+      const { data: pinResult, error: pinError } = await supabase.rpc('refund_payment_with_pin', { p_payment_id: id, p_reason: refundReason.trim(), p_pin: refundPin.trim() });
+      setRefundBusy(false);
+      if (pinError) {
+        Alert.alert('Could not refund', pinError.message);
+        return;
+      }
+      const res = pinResult as { ok: boolean; error?: string };
+      if (!res.ok) {
+        Alert.alert(res.error === 'pin_locked' ? 'Too many tries' : 'Wrong PIN', res.error === 'pin_locked' ? 'Try again in 10 minutes, or send it for approval without a PIN.' : 'That is not a manager PIN.');
+        return;
+      }
+      setRefunding(false);
+      setRefundReason('');
+      setRefundPin('');
+      load();
+      return;
+    }
     const { data, error } = await supabase.rpc('refund_payment', { p_payment_id: id, p_amount_minor: null, p_reason: refundReason.trim() });
     setRefundBusy(false);
     if (error) {
@@ -201,6 +220,17 @@ function PaymentDetailScreen() {
               placeholderTextColor={colors.ink500}
               style={{ height: 48, borderRadius: 14, borderWidth: 1.5, borderColor: colors.inputBorder, paddingHorizontal: 14, color: colors.ink900 }}
             />
+            {!membership?.permissions.has('payments.refund') ? (
+              <TextInput
+                value={refundPin}
+                onChangeText={setRefundPin}
+                placeholder="Manager PIN (optional, approves now)"
+                placeholderTextColor={colors.ink500}
+                secureTextEntry
+                keyboardType="number-pad"
+                style={{ height: 48, borderRadius: 14, borderWidth: 1.5, borderColor: colors.inputBorder, paddingHorizontal: 14, color: colors.ink900 }}
+              />
+            ) : null}
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <Pressable onPress={() => setRefunding(false)} style={{ flex: 1, height: 46, borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.inputBorder, alignItems: 'center', justifyContent: 'center' }}>
                 <Text style={{ fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>Cancel</Text>

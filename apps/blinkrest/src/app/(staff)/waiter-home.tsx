@@ -7,6 +7,7 @@ import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated'
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { BottomNav } from '@/components/BottomNav';
 import { Icon } from '@/components/Icon';
+import { ShiftBreak } from '@/components/ShiftBreak';
 import { PartPaymentSheet, type PartPayOrder } from '@/components/PartPaymentSheet';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsOnline } from '@/hooks/useIsOnline';
@@ -188,6 +189,7 @@ export default function WaiterHome() {
             {shiftBusy ? 'Please wait…' : shiftStartedAt ? 'End shift' : 'Start shift'}
           </Text>
         </Pressable>
+        <ShiftBreak />
 
         {readyOrders.length > 0 ? (
           <Animated.View entering={FadeInDown.springify().damping(14)} style={{ backgroundColor: colors.success, borderRadius: 24, padding: 16, gap: 12 }}>

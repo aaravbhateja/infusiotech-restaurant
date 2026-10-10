@@ -41,6 +41,7 @@ export default function StaffLayout() {
       <Stack.Screen name="kitchen-stats" />
       <Stack.Screen name="inventory" />
       <Stack.Screen name="reports" />
+      <Stack.Screen name="roster" />
       <Stack.Screen name="payments/index" />
       <Stack.Screen name="payments/[id]" />
       <Stack.Screen name="reviews" />

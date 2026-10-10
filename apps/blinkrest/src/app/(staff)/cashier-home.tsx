@@ -9,6 +9,7 @@ import { PartPaymentSheet, type PartPayOrder } from '@/components/PartPaymentShe
 import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/Button';
 import { Icon } from '@/components/Icon';
+import { ShiftBreak } from '@/components/ShiftBreak';
 import { Skeleton } from '@/components/Skeleton';
 import { EmptyState, ErrorState } from '@/components/States';
 import { useAuth } from '@/hooks/useAuth';
@@ -249,6 +250,7 @@ export default function CashierHome() {
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.bg }}>
       <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: 100 }}>
+        <ShiftBreak />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <View style={{ width: 46, height: 46, borderRadius: 23, backgroundColor: colors.infoBg, alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{ fontSize: 15, fontFamily: fonts.bodyExtraBold, color: colors.info }}>{initials}</Text>

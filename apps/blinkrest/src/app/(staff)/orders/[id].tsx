@@ -58,6 +58,7 @@ function OrderDetailScreen() {
   const [voiding, setVoiding] = useState<OrderItem | null>(null);
   const [voidReason, setVoidReason] = useState('');
   const [voidBusy, setVoidBusy] = useState(false);
+  const [voidPin, setVoidPin] = useState('');
   // Kitchen staff only prepare food: no bills, receipts or printing.
   const canSeeBill = !!(membership?.permissions.has('payments.view') || membership?.permissions.has('payments.cash.collect') || membership?.permissions.has('orders.create'));
   const [discountRequest, setDiscountRequest] = useState<DiscountRequest | null>(null);
@@ -160,6 +161,25 @@ function OrderDetailScreen() {
     }
     if (!guardOnline(isOnline)) return;
     setVoidBusy(true);
+    // A manager's PIN approves it on the spot; otherwise it becomes a request.
+    if (voidPin.trim() && !membership?.permissions.has('orders.void')) {
+      const { data: pinResult, error: pinError } = await supabase.rpc('void_order_item_with_pin', { p_item_id: voiding.id, p_reason: voidReason.trim(), p_pin: voidPin.trim() });
+      setVoidBusy(false);
+      if (pinError) {
+        Alert.alert('Could not void item', pinError.message);
+        return;
+      }
+      const res = pinResult as { ok: boolean; error?: string };
+      if (!res.ok) {
+        Alert.alert(res.error === 'pin_locked' ? 'Too many tries' : 'Wrong PIN', res.error === 'pin_locked' ? 'Try again in 10 minutes, or send it for approval without a PIN.' : 'That is not a manager PIN.');
+        return;
+      }
+      setVoiding(null);
+      setVoidReason('');
+      setVoidPin('');
+      load();
+      return;
+    }
     const { data, error } = await supabase.rpc('void_order_item', { p_item_id: voiding.id, p_reason: voidReason.trim() });
     setVoidBusy(false);
     if (error) {
@@ -335,6 +355,17 @@ function OrderDetailScreen() {
             placeholderTextColor={colors.ink500}
             style={{ height: 48, borderRadius: 14, borderWidth: 1.5, borderColor: colors.inputBorder, paddingHorizontal: 14, color: colors.ink900 }}
           />
+          {!membership?.permissions.has('orders.void') ? (
+            <TextInput
+              value={voidPin}
+              onChangeText={setVoidPin}
+              placeholder="Manager PIN (optional, approves now)"
+              placeholderTextColor={colors.ink500}
+              secureTextEntry
+              keyboardType="number-pad"
+              style={{ height: 48, borderRadius: 14, borderWidth: 1.5, borderColor: colors.inputBorder, paddingHorizontal: 14, color: colors.ink900 }}
+            />
+          ) : null}
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <Pressable onPress={() => setVoiding(null)} style={{ flex: 1, height: 46, borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.inputBorder, alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>Cancel</Text>

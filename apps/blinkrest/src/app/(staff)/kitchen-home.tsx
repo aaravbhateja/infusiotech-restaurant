@@ -7,6 +7,7 @@ import Animated, { Easing, FadeInDown, LinearTransition, useAnimatedStyle, useSh
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { BottomNav } from '@/components/BottomNav';
 import { Icon } from '@/components/Icon';
+import { ShiftBreak } from '@/components/ShiftBreak';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsOnline } from '@/hooks/useIsOnline';
 import { guardOnline } from '@/lib/offline';
@@ -122,6 +123,7 @@ export default function KitchenHome() {
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: DARK.bg }}>
       <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: 100 }}>
+        <ShiftBreak />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <View style={{ width: 46, height: 46, borderRadius: 15, backgroundColor: colors.saffron400, alignItems: 'center', justifyContent: 'center' }}>
             <Icon name="chef" size={24} stroke={2} color={colors.ink900} />
