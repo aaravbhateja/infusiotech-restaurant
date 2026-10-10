@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedToggle } from '@/components/AnimatedToggle';
@@ -29,6 +29,11 @@ function EditMenuItemScreen() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
+  const [history, setHistory] = useState<{ id: string; changed_at: string; old_name: string | null; new_name: string | null; old_price_minor: number | null; new_price_minor: number | null }[]>([]);
+  const [requesting, setRequesting] = useState(false);
+  const [reqPrice, setReqPrice] = useState('');
+  const [reqReason, setReqReason] = useState('');
+  const [reqBusy, setReqBusy] = useState(false);
   const [isVeg, setIsVeg] = useState(true);
   const [station, setStation] = useState('general');
   const [prepMinutes, setPrepMinutes] = useState('');
@@ -45,7 +50,7 @@ function EditMenuItemScreen() {
       supabase.from('menu_categories').select('id, name').eq('tenant_id', membership.tenantId).eq('is_active', true).order('sort_order'),
       supabase
         .from('menu_items')
-        .select('category_id, name, description, price_minor, dietary_labels, is_available, image_path, station, prep_minutes')
+        .select('category_id, name, description, price_minor, dietary_labels, is_available, image_path, station, prep_minutes, base_price_minor')
         .eq('id', id)
         .eq('tenant_id', membership.tenantId)
         .single(),
@@ -55,7 +60,8 @@ function EditMenuItemScreen() {
       setCategoryId(item.category_id);
       setName(item.name);
       setDescription(item.description ?? '');
-      setPrice(String(item.price_minor / 100));
+      // The permanent price (the live one may be a happy-hour price).
+      setPrice(String(item.base_price_minor / 100));
       setIsVeg(item.dietary_labels?.includes('veg') ?? true);
       setStation(item.station ?? 'general');
       setPrepMinutes(item.prep_minutes ? String(item.prep_minutes) : '');
@@ -98,6 +104,49 @@ function EditMenuItemScreen() {
     setCategoryId(data.id);
     setNewCategoryName('');
     setAddingCategory(false);
+  }
+
+  const loadHistory = useCallback(async () => {
+    const { data } = await supabase
+      .from('menu_item_history')
+      .select('id, changed_at, old_name, new_name, old_price_minor, new_price_minor')
+      .eq('menu_item_id', id)
+      .order('changed_at', { ascending: false })
+      .limit(6);
+    setHistory(data ?? []);
+  }, [id]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
+    loadHistory();
+  }, [loadHistory]);
+
+  async function restoreVersion(historyId: string) {
+    const { error: restoreError } = await supabase.rpc('restore_menu_item_version', { p_history_id: historyId });
+    if (restoreError) {
+      Alert.alert('Could not restore', restoreError.message === 'price_change_requires_approval' ? 'Restoring a price needs the price permission.' : restoreError.message);
+      return;
+    }
+    Alert.alert('Restored', 'The earlier version is back.');
+    router.replace(`/(staff)/menu/${id}` as never);
+  }
+
+  async function submitPriceRequest() {
+    const minor = Math.round(parseFloat(reqPrice || '0') * 100);
+    if (minor <= 0 || reqReason.trim().length === 0) {
+      Alert.alert('Check the details', 'Enter the new price and a reason.');
+      return;
+    }
+    setReqBusy(true);
+    const { data, error: reqError } = await supabase.rpc('request_price_change', { p_item_id: id, p_new_price_minor: minor, p_reason: reqReason.trim() });
+    setReqBusy(false);
+    if (reqError) {
+      Alert.alert('Could not send request', reqError.message);
+      return;
+    }
+    setRequesting(false);
+    setReqReason('');
+    Alert.alert((data as { status?: string })?.status === 'pending_approval' ? 'Sent for approval' : 'Price changed', (data as { status?: string })?.status === 'pending_approval' ? 'The owner has to approve this price change.' : 'The new price is live.');
   }
 
   async function save() {
@@ -326,8 +375,57 @@ function EditMenuItemScreen() {
 
         <View style={{ backgroundColor: colors.surface, borderRadius: 22, borderWidth: 1, borderColor: '#F4ECE6', padding: 16, gap: 14 }}>
           <Text style={{ fontSize: 18, fontFamily: fonts.display, color: colors.ink900 }}>Price</Text>
-          <TextField label="Price (₹)" value={price} onChangeText={setPrice} keyboardType="decimal-pad" error={error ?? undefined} />
+          {membership?.permissions.has('menu.price.edit') ? (
+            <TextField label="Price (₹)" value={price} onChangeText={setPrice} keyboardType="decimal-pad" error={error ?? undefined} />
+          ) : (
+            <View style={{ gap: 8 }}>
+              <Text style={{ fontSize: 22, fontFamily: fonts.display, color: colors.ink900 }}>₹{price}</Text>
+              <Text style={{ fontSize: 12, color: colors.ink500 }}>You cannot change prices directly. Ask for a change and the owner approves it.</Text>
+              <Pressable onPress={() => { setReqPrice(price); setRequesting(true); }} style={{ alignSelf: 'flex-start', height: 40, paddingHorizontal: 16, borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.inputBorder, justifyContent: 'center' }}>
+                <Text style={{ fontFamily: fonts.bodyExtraBold, color: colors.ink900, fontSize: 13 }}>Request price change</Text>
+              </Pressable>
+            </View>
+          )}
         </View>
+
+        {history.length > 0 ? (
+          <View style={{ backgroundColor: colors.surface, borderRadius: 22, borderWidth: 1, borderColor: '#F4ECE6', padding: 16, gap: 10 }}>
+            <Text style={{ fontSize: 18, fontFamily: fonts.display, color: colors.ink900 }}>Version history</Text>
+            {history.map((h) => (
+              <View key={h.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, fontFamily: fonts.bodyBold, color: colors.ink900 }}>
+                    {h.old_price_minor !== h.new_price_minor ? `₹${(h.old_price_minor ?? 0) / 100} → ₹${(h.new_price_minor ?? 0) / 100}` : h.old_name !== h.new_name ? `${h.old_name} → ${h.new_name}` : 'Description edited'}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: colors.ink500 }}>{new Date(h.changed_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}</Text>
+                </View>
+                {membership?.permissions.has('menu.edit') ? (
+                  <Pressable onPress={() => restoreVersion(h.id)} style={{ height: 32, paddingHorizontal: 12, borderRadius: radius.pill, backgroundColor: colors.bg, justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 12, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>Undo</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        <Modal visible={requesting} transparent animationType="fade" onRequestClose={() => setRequesting(false)}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+            <View style={{ width: '100%', maxWidth: 380, backgroundColor: colors.surface, borderRadius: 24, padding: 20, gap: 12 }}>
+              <Text style={{ fontSize: 18, fontFamily: fonts.display, color: colors.ink900 }}>Request price change</Text>
+              <TextInput value={reqPrice} onChangeText={setReqPrice} keyboardType="decimal-pad" placeholder="New price (₹)" placeholderTextColor={colors.ink500} style={{ height: 48, borderRadius: 14, borderWidth: 1.5, borderColor: colors.inputBorder, paddingHorizontal: 14, color: colors.ink900 }} />
+              <TextInput value={reqReason} onChangeText={setReqReason} placeholder="Reason" placeholderTextColor={colors.ink500} style={{ height: 48, borderRadius: 14, borderWidth: 1.5, borderColor: colors.inputBorder, paddingHorizontal: 14, color: colors.ink900 }} />
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <Pressable onPress={() => setRequesting(false)} style={{ flex: 1, height: 46, borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.inputBorder, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>Cancel</Text>
+                </Pressable>
+                <Pressable disabled={reqBusy} onPress={submitPriceRequest} style={{ flex: 1, height: 46, borderRadius: radius.pill, backgroundColor: colors.coral600, alignItems: 'center', justifyContent: 'center', opacity: reqBusy ? 0.6 : 1 }}>
+                  <Text style={{ fontFamily: fonts.bodyExtraBold, color: '#FFFFFF' }}>Send</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         <View style={{ backgroundColor: colors.surface, borderRadius: 22, borderWidth: 1, borderColor: '#F4ECE6', padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View>

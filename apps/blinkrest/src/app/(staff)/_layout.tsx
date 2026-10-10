@@ -19,6 +19,7 @@ export default function StaffLayout() {
       <Stack.Screen name="menu/index" options={{ animation: 'none' }} />
       <Stack.Screen name="menu/[id]" />
       <Stack.Screen name="menu/new" />
+      <Stack.Screen name="menu/timings" />
       <Stack.Screen name="tables" options={{ animation: 'none' }} />
       <Stack.Screen name="more" options={{ animation: 'none' }} />
       <Stack.Screen name="orders/[id]" />

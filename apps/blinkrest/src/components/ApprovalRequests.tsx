@@ -8,7 +8,7 @@ import { colors, fonts, radius } from '@/theme/tokens';
 
 type Request = {
   id: string;
-  kind: 'void_item' | 'refund';
+  kind: 'void_item' | 'refund' | 'price_change';
   summary: string | null;
   reason: string;
   created_at: string;
@@ -17,13 +17,14 @@ type Request = {
 const KIND_LABEL: Record<Request['kind'], string> = {
   void_item: 'Remove item',
   refund: 'Refund',
+  price_change: 'Price change',
 };
 
 // Pending sensitive actions (item voids, refunds) raised by staff who can't do
 // them directly. Shown to whoever may approve them; renders nothing otherwise.
 export function ApprovalRequests() {
   const { membership } = useAuth();
-  const canReview = !!(membership?.permissions.has('orders.void') || membership?.permissions.has('payments.refund'));
+  const canReview = !!(membership?.permissions.has('orders.void') || membership?.permissions.has('payments.refund') || membership?.permissions.has('menu.price.edit'));
   const [requests, setRequests] = useState<Request[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
 

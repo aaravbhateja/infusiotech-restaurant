@@ -106,6 +106,12 @@ function MenuScreen() {
               {items.length} items · {categories.length} categories
             </Text>
           </View>
+          <Pressable
+            onPress={() => router.push('/(staff)/menu/timings' as never)}
+            style={{ height: 40, paddingHorizontal: 14, borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.line, justifyContent: 'center', marginRight: 8 }}
+          >
+            <Text style={{ fontSize: 13, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>Timings</Text>
+          </Pressable>
           {membership.permissions.has('menu.edit') ? (
             <Pressable
               onPress={() => setCsvOpen(true)}
