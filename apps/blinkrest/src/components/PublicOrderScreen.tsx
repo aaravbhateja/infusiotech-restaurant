@@ -241,6 +241,30 @@ export function PublicOrderScreen({ token, previewTenantId, onBack }: { token?: 
     };
   }, [token, previewTenantId, attempt]);
 
+  // Sold-out sync: staff can switch a dish off at any moment, so keep the
+  // menu in step while the guest is browsing and drop sold-out dishes from
+  // their cart instead of failing at checkout.
+  const tenantIdForSync = info?.tenant?.id;
+  useEffect(() => {
+    if (!tenantIdForSync || previewTenantId) return;
+    const timer = setInterval(async () => {
+      const { data: fresh } = await supabase
+        .from('menu_items')
+        .select('id, category_id, name, description, price_minor, currency, is_available, image_path, dietary_labels')
+        .eq('tenant_id', tenantIdForSync)
+        .eq('is_available', true)
+        .order('sort_order');
+      if (!fresh) return;
+      setItems(fresh as any);
+      const ids = new Set(fresh.map((i) => i.id));
+      setCart((prev) => {
+        const kept = Object.fromEntries(Object.entries(prev).filter(([id]) => ids.has(id)));
+        return Object.keys(kept).length === Object.keys(prev).length ? prev : kept;
+      });
+    }, 20000);
+    return () => clearInterval(timer);
+  }, [tenantIdForSync, previewTenantId]);
+
   const visibleItems = useMemo(() => {
     const q = query.trim().toLowerCase();
     return items.filter((item) => {

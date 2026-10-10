@@ -7,6 +7,7 @@ import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated'
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { BottomNav } from '@/components/BottomNav';
 import { Icon } from '@/components/Icon';
+import { PartPaymentSheet, type PartPayOrder } from '@/components/PartPaymentSheet';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsOnline } from '@/hooks/useIsOnline';
 import { guardOnline } from '@/lib/offline';
@@ -24,7 +25,7 @@ type OrderRow = {
   table: { label: string } | null;
 };
 
-type ToCollect = { id: string; order_number: string; total_minor: number; bill_requested_at: string | null; table: { label: string } | null };
+type ToCollect = { id: string; order_number: string; total_minor: number; amount_paid_minor: number; bill_requested_at: string | null; table: { label: string } | null };
 
 const STATUS_META: Record<string, { label: string; icon: 'bolt' | 'flame' | 'bell' | 'timer'; bg: string; fg: string }> = {
   new: { label: 'New order', icon: 'bolt', bg: colors.coral50, fg: colors.coral700 },
@@ -49,6 +50,7 @@ export default function WaiterHome() {
   const [shiftBusy, setShiftBusy] = useState(false);
   const [ordersTaken, setOrdersTaken] = useState(0);
   const [toCollect, setToCollect] = useState<ToCollect[]>([]);
+  const [splitting, setSplitting] = useState<PartPayOrder | null>(null);
   const [heldMinor, setHeldMinor] = useState(0);
   const [now, setNow] = useState(() => Date.now());
 
@@ -65,7 +67,7 @@ export default function WaiterHome() {
       const [{ data: unpaid }, { data: held }] = await Promise.all([
         supabase
           .from('orders')
-          .select('id, order_number, total_minor, bill_requested_at, table:restaurant_tables(label)')
+          .select('id, order_number, total_minor, amount_paid_minor, bill_requested_at, table:restaurant_tables(label)')
           .or(`served_by.eq.${membership.id},bill_requested_at.not.is.null`)
           .eq('order_status', 'served')
           .eq('payment_status', 'unpaid')
@@ -130,7 +132,7 @@ export default function WaiterHome() {
   async function collectPayment(o: ToCollect, method: 'upi' | 'card' | 'cash') {
     if (!guardOnline(isOnline)) return;
     const label = method === 'upi' ? 'UPI' : method === 'card' ? 'Card' : 'Cash';
-    Alert.alert(`Record ${formatMinor(o.total_minor)} by ${label}?`, `${o.table?.label ?? 'Order'} · #${o.order_number}. Confirm the guest has paid.`, [
+    Alert.alert(`Record ${formatMinor(o.total_minor - o.amount_paid_minor)} by ${label}?`, `${o.table?.label ?? 'Order'} · #${o.order_number}. Confirm the guest has paid.`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: `${label} received`,
@@ -230,7 +232,7 @@ export default function WaiterHome() {
                       {o.bill_requested_at ? 'Guest asked for the bill' : 'Served · unpaid'}
                     </Text>
                   </View>
-                  <Text style={{ fontSize: 18, fontFamily: fonts.display, color: colors.ink900 }}>{formatMinor(o.total_minor)}</Text>
+                  <Text style={{ fontSize: 18, fontFamily: fonts.display, color: colors.ink900 }}>{formatMinor(o.total_minor - o.amount_paid_minor)}</Text>
                 </View>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   {([['upi', 'UPI'], ['card', 'Card'], ['cash', 'Cash']] as const).map(([m, label]) => (
@@ -239,6 +241,12 @@ export default function WaiterHome() {
                     </Pressable>
                   ))}
                 </View>
+                <Pressable
+                  onPress={() => setSplitting({ id: o.id, label: `${o.table?.label ?? 'Order'} · #${o.order_number}`, totalMinor: o.total_minor, paidMinor: o.amount_paid_minor })}
+                  style={{ alignSelf: 'flex-start' }}
+                >
+                  <Text style={{ fontSize: 13, fontFamily: fonts.bodyExtraBold, color: colors.coral600 }}>Split bill / part payment</Text>
+                </Pressable>
               </View>
             ))}
           </View>
@@ -279,6 +287,7 @@ export default function WaiterHome() {
         <Text style={{ color: '#FFFFFF', fontFamily: fonts.bodyExtraBold, fontSize: 16 }}>Take order</Text>
       </AnimatedPressable>
       <BottomNav active="home" />
+      <PartPaymentSheet order={splitting} onClose={() => setSplitting(null)} onChanged={load} />
     </SafeAreaView>
   );
 }

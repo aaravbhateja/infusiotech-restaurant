@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '@/components/Icon';
 import { RequireAccess } from '@/components/RequireAccess';
 import { useAuth } from '@/hooks/useAuth';
+import { tenantSubs, useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 import { supabase } from '@/lib/supabase';
 import { colors, fonts, formatMinor, radius, shadow } from '@/theme/tokens';
 
@@ -39,6 +40,8 @@ function NewOrderScreen() {
     setItems((menuItems as MenuItem[]) ?? []);
     setTables(tableRows ?? []);
   }, [membership]);
+
+  useRealtimeRefresh('neworderstsx', tenantSubs(membership?.tenantId, ['menu_items', 'menu_categories']), load);
 
   const loadParked = useCallback(async () => {
     const { data } = await supabase.from('parked_orders').select('id, table_id, label, guest_count, items').order('created_at');

@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, FadeOutUp, LinearTransition } from 'react-native-reanimated';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { PartPaymentSheet, type PartPayOrder } from '@/components/PartPaymentSheet';
 import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/Button';
 import { Icon } from '@/components/Icon';
@@ -23,6 +24,7 @@ type Bill = {
   order_number: string;
   order_status: string;
   total_minor: number;
+  amount_paid_minor: number;
   table: { label: string } | null;
   customer: { name: string | null; phone: string | null } | null;
   items: { item_name_snapshot: string; quantity: number }[];
@@ -47,6 +49,7 @@ export default function CashierHome() {
   const [tab, setTab] = useState<Tab>('all');
   const [query, setQuery] = useState('');
   const [bills, setBills] = useState<Bill[]>([]);
+  const [splitting, setSplitting] = useState<PartPayOrder | null>(null);
   const [shift, setShift] = useState<Shift | null>(null);
   const [cashCollected, setCashCollected] = useState(0);
   const [pendingHandovers, setPendingHandovers] = useState(0);
@@ -63,7 +66,7 @@ export default function CashierHome() {
     const [{ data, error }, { data: shiftRow }] = await Promise.all([
       supabase
         .from('orders')
-        .select('id, order_number, order_status, total_minor, table:restaurant_tables(label), customer:customers(name, phone), items:order_items(item_name_snapshot, quantity)')
+        .select('id, order_number, order_status, total_minor, amount_paid_minor, table:restaurant_tables(label), customer:customers(name, phone), items:order_items(item_name_snapshot, quantity)')
         .eq('payment_status', 'unpaid')
         .not('order_status', 'in', '(rejected,cancelled)')
         .order('created_at'),
@@ -168,7 +171,7 @@ export default function CashierHome() {
   // counter; everyone else will settle up when they're done dining.
   const atCounter = matches.filter((b) => b.order_status === 'served');
   const dining = matches.filter((b) => b.order_status !== 'served');
-  const totalQueue = bills.reduce((s, b) => s + b.total_minor, 0);
+  const totalQueue = bills.reduce((s, b) => s + (b.total_minor - b.amount_paid_minor), 0);
   const expectedDrawer = (shift?.opening_float_minor ?? 0) + cashCollected;
   const initials = (session?.user.email ?? 'C').slice(0, 2).toUpperCase();
 
@@ -194,7 +197,10 @@ export default function CashierHome() {
             </Text>
             <Text numberOfLines={1} style={{ fontSize: 12, color: colors.ink500 }}>{itemsLine(b.items)}</Text>
           </View>
-          <Text style={{ fontSize: 18, fontFamily: fonts.display, color: colors.ink900 }}>{formatMinor(b.total_minor)}</Text>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={{ fontSize: 18, fontFamily: fonts.display, color: colors.ink900 }}>{formatMinor(b.total_minor - b.amount_paid_minor)}</Text>
+            {b.amount_paid_minor > 0 ? <Text style={{ fontSize: 11, fontFamily: fonts.bodyBold, color: colors.success }}>{formatMinor(b.amount_paid_minor)} paid of {formatMinor(b.total_minor)}</Text> : null}
+          </View>
         </View>
         <View style={{ flexDirection: 'row', gap: 6 }}>
           <View style={{ height: 22, paddingHorizontal: 8, borderRadius: radius.pill, borderWidth: 1.5, borderColor: '#E0B860', borderStyle: 'dashed', justifyContent: 'center' }}>
@@ -223,6 +229,12 @@ export default function CashierHome() {
             );
           })}
         </View>
+        <Pressable
+          onPress={() => setSplitting({ id: b.id, label: `${b.table?.label ?? 'Takeaway'} · #${b.order_number}`, totalMinor: b.total_minor, paidMinor: b.amount_paid_minor })}
+          style={{ alignSelf: 'flex-start' }}
+        >
+          <Text style={{ fontSize: 13, fontFamily: fonts.bodyExtraBold, color: colors.coral600 }}>Split bill / part payment</Text>
+        </Pressable>
       </Animated.View>
     );
   }
@@ -427,6 +439,7 @@ export default function CashierHome() {
       ))}
 
       <BottomNav active="home" />
+      <PartPaymentSheet order={splitting} onClose={() => setSplitting(null)} onChanged={load} />
     </SafeAreaView>
   );
 }

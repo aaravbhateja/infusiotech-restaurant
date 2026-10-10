@@ -53,6 +53,9 @@ function TableDetailScreen() {
   const [editCapacity, setEditCapacity] = useState('');
   const [savingTable, setSavingTable] = useState(false);
   const [transferring, setTransferring] = useState(false);
+  const [merging, setMerging] = useState(false);
+  const [mergeCandidates, setMergeCandidates] = useState<{ id: string; order_number: string; total_minor: number; table: { label: string } | null }[]>([]);
+  const [mergeBusy, setMergeBusy] = useState(false);
   const [freeTables, setFreeTables] = useState<{ id: string; label: string }[]>([]);
   const [loadingFreeTables, setLoadingFreeTables] = useState(false);
   const [transferBusy, setTransferBusy] = useState(false);
@@ -196,6 +199,48 @@ function TableDetailScreen() {
     setLoadingFreeTables(false);
   }
 
+  // Merge: pull another table's served, unpaid bill into this one.
+  async function openMerge() {
+    if (!activeOrder || !guardOnline(isOnline)) return;
+    setMerging(true);
+    const { data } = await supabase
+      .from('orders')
+      .select('id, order_number, total_minor, table:restaurant_tables(label)')
+      .eq('order_status', 'served')
+      .eq('payment_status', 'unpaid')
+      .eq('amount_paid_minor', 0)
+      .is('table_released_at', null)
+      .not('table_id', 'is', null)
+      .neq('id', activeOrder.id)
+      .order('created_at');
+    setMergeCandidates((data as unknown as typeof mergeCandidates) ?? []);
+  }
+
+  function confirmMerge(source: (typeof mergeCandidates)[number]) {
+    if (!activeOrder) return;
+    Alert.alert(
+      `Merge ${source.table?.label ?? 'table'} into this bill?`,
+      `#${source.order_number} (${formatMinor(source.total_minor)}) will be added to #${activeOrder.order_number} and ${source.table?.label ?? 'that table'} will be freed.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Merge',
+          onPress: async () => {
+            setMergeBusy(true);
+            const { error } = await supabase.rpc('merge_orders', { p_target_id: activeOrder.id, p_source_id: source.id });
+            setMergeBusy(false);
+            if (error) {
+              Alert.alert('Could not merge', error.message === 'orders_not_mergeable' ? 'Both bills must be served, unpaid and still open.' : error.message);
+              return;
+            }
+            setMerging(false);
+            load();
+          },
+        },
+      ],
+    );
+  }
+
   async function doTransfer(toTableId: string) {
     if (!activeOrder) return;
     if (!guardOnline(isOnline)) return;
@@ -218,6 +263,9 @@ function TableDetailScreen() {
     { label: 'Cleaning', icon: 'broom', bg: '#FFF4D6', fg: '#8A5A00', go: () => openSheet('C') },
     ...(activeOrder && membership?.permissions.has('tables.assign')
       ? [{ label: 'Transfer', icon: 'share' as IconName, bg: '#F1EBFF', fg: '#5B21B6', go: openTransfer }]
+      : []),
+    ...(activeOrder?.order_status === 'served' && membership?.permissions.has('tables.assign')
+      ? [{ label: 'Merge bill', icon: 'share' as IconName, bg: '#EAF1FF', fg: '#1F5BD6', go: openMerge }]
       : []),
     ...(membership?.permissions.has('tables.manage')
       ? [{ label: 'Edit table', icon: 'edit' as IconName, bg: '#F7F1EC', fg: colors.ink900, go: openEditTable }]
@@ -427,6 +475,36 @@ function TableDetailScreen() {
               )}
             </ScrollView>
             <Pressable onPress={() => setTransferring(false)} style={{ height: 54, borderRadius: radius.pill, borderWidth: 1.5, borderColor: '#E4D8D0', alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontFamily: fonts.bodyExtraBold, fontSize: 15, color: colors.ink900 }}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+
+      {merging ? (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(27,23,22,0.45)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, paddingBottom: 32, gap: 14, maxHeight: '70%' }}>
+            <View style={{ alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: '#E4D8D0' }} />
+            <Text style={{ fontSize: 22, fontFamily: fonts.display, color: colors.ink900 }}>Merge which bill into this one?</Text>
+            <Text style={{ fontSize: 13, color: colors.ink700 }}>Served, unpaid bills from other tables.</Text>
+            <ScrollView contentContainerStyle={{ gap: 8 }}>
+              {mergeCandidates.length === 0 ? (
+                <Text style={{ color: colors.ink500, padding: 12 }}>No other table has a served, unpaid bill.</Text>
+              ) : (
+                mergeCandidates.map((c) => (
+                  <Pressable
+                    key={c.id}
+                    disabled={mergeBusy}
+                    onPress={() => confirmMerge(c)}
+                    style={{ height: 58, borderRadius: 16, borderWidth: 1.5, borderColor: '#E4D8D0', paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+                  >
+                    <Text style={{ fontFamily: fonts.bodyExtraBold, fontSize: 15, color: colors.ink900 }}>{c.table?.label ?? 'Table'} · #{c.order_number}</Text>
+                    <Text style={{ fontFamily: fonts.bodyExtraBold, fontSize: 15, color: colors.ink900 }}>{formatMinor(c.total_minor)}</Text>
+                  </Pressable>
+                ))
+              )}
+            </ScrollView>
+            <Pressable onPress={() => setMerging(false)} style={{ height: 54, borderRadius: radius.pill, borderWidth: 1.5, borderColor: '#E4D8D0', alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ fontFamily: fonts.bodyExtraBold, fontSize: 15, color: colors.ink900 }}>Cancel</Text>
             </Pressable>
           </View>
