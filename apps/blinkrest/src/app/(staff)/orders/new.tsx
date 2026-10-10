@@ -12,6 +12,7 @@ import { colors, fonts, formatMinor, radius, shadow } from '@/theme/tokens';
 type Category = { id: string; name: string };
 type MenuItem = { id: string; category_id: string; name: string; price_minor: number; currency: string; is_available: boolean };
 type TableOption = { id: string; label: string };
+type Parked = { id: string; table_id: string | null; label: string; guest_count: number | null; items: { menu_item_id: string; quantity: number }[] };
 
 function NewOrderScreen() {
   const { membership } = useAuth();
@@ -25,6 +26,7 @@ function NewOrderScreen() {
   const [activeCategory, setActiveCategory] = useState('All');
   const [cart, setCart] = useState<Record<string, number>>({});
   const [placing, setPlacing] = useState(false);
+  const [parked, setParked] = useState<Parked[]>([]);
 
   const load = useCallback(async () => {
     if (!membership) return;
@@ -38,10 +40,16 @@ function NewOrderScreen() {
     setTables(tableRows ?? []);
   }, [membership]);
 
+  const loadParked = useCallback(async () => {
+    const { data } = await supabase.from('parked_orders').select('id, table_id, label, guest_count, items').order('created_at');
+    setParked((data as Parked[]) ?? []);
+  }, []);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
     load();
-  }, [load]);
+    loadParked();
+  }, [load, loadParked]);
 
   const visibleItems = useMemo(
     () => (activeCategory === 'All' ? items : items.filter((i) => i.category_id === activeCategory)),
@@ -57,6 +65,46 @@ function NewOrderScreen() {
 
   function setQty(itemId: string, qty: number) {
     setCart((prev) => ({ ...prev, [itemId]: Math.max(0, qty) }));
+  }
+
+  // Hold: save the cart on the server so any device can resume it later.
+  async function parkOrder() {
+    if (!membership || cartLines.length === 0) return;
+    if (!takeaway && !tableId) {
+      Alert.alert('Pick a table', 'Choose a table, or switch to Takeaway, before parking.');
+      return;
+    }
+    const label = takeaway ? 'Takeaway' : tables.find((t) => t.id === tableId)?.label ?? 'Table';
+    const { error } = await supabase.from('parked_orders').insert({
+      tenant_id: membership.tenantId,
+      created_by: membership.id,
+      table_id: takeaway ? null : tableId,
+      label,
+      guest_count: guestCount.trim() ? Number(guestCount) : null,
+      items: cartLines.map((l) => ({ menu_item_id: l.item.id, quantity: l.qty })),
+    });
+    if (error) {
+      Alert.alert('Could not park order', error.message);
+      return;
+    }
+    setCart({});
+    loadParked();
+  }
+
+  async function resumeParked(p: Parked) {
+    const next: Record<string, number> = {};
+    for (const line of p.items) next[line.menu_item_id] = line.quantity;
+    setCart(next);
+    setTakeaway(p.table_id === null);
+    setTableId(p.table_id);
+    setGuestCount(p.guest_count ? String(p.guest_count) : '');
+    await supabase.from('parked_orders').delete().eq('id', p.id);
+    loadParked();
+  }
+
+  async function discardParked(p: Parked) {
+    await supabase.from('parked_orders').delete().eq('id', p.id);
+    loadParked();
   }
 
   async function placeOrder() {
@@ -153,6 +201,32 @@ function NewOrderScreen() {
         ) : null}
 
           </>
+        ) : null}
+
+        {!orderId && parked.length > 0 ? (
+          <View style={{ gap: 6 }}>
+            <Text style={{ fontSize: 12, fontFamily: fonts.bodyExtraBold, color: colors.ink700, letterSpacing: 0.6 }}>PARKED ORDERS</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              {parked.map((p) => (
+                <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', borderRadius: radius.pill, backgroundColor: colors.saffron50, borderWidth: 1.5, borderColor: colors.saffron400, paddingLeft: 14, paddingRight: 6, height: 42, gap: 8 }}>
+                  <Pressable onPress={() => resumeParked(p)}>
+                    <Text style={{ fontSize: 13, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>
+                      {p.label} · {p.items.reduce((n, i) => n + i.quantity, 0)} items · Resume
+                    </Text>
+                  </Pressable>
+                  <Pressable onPress={() => discardParked(p)} style={{ width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon name="x" size={14} stroke={2.4} color={colors.ink700} />
+                  </Pressable>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
+
+        {!orderId && cartCount > 0 ? (
+          <Pressable onPress={parkOrder} style={{ alignSelf: 'flex-start', height: 38, paddingHorizontal: 16, borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.inputBorder, justifyContent: 'center' }}>
+            <Text style={{ fontSize: 13, fontFamily: fonts.bodyExtraBold, color: colors.ink900 }}>Park this order for later</Text>
+          </Pressable>
         ) : null}
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>

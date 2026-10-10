@@ -73,8 +73,8 @@ function TableDetailScreen() {
       .maybeSingle();
 
     if (active) {
-      const { data: items } = await supabase.from('order_items').select('item_name_snapshot, quantity, line_total_minor').eq('order_id', active.id);
-      setActiveOrder({ ...active, items: items ?? [] });
+      const { data: items } = await supabase.from('order_items').select('item_name_snapshot, quantity, line_total_minor, voided_at').eq('order_id', active.id);
+      setActiveOrder({ ...active, items: (items ?? []).filter((i) => !i.voided_at) });
       setStatus('O');
     } else {
       setActiveOrder(null);
@@ -436,6 +436,7 @@ function TableDetailScreen() {
       {billOpen && activeOrder ? (
         <BillPreviewSheet
           order={{
+            orderId: activeOrder.id,
             orderNumber: activeOrder.order_number,
             createdAt: new Date().toISOString(),
             tableLabel: table?.label ?? null,

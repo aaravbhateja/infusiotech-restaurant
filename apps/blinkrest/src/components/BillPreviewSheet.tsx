@@ -11,6 +11,7 @@ import { Icon } from './Icon';
 const mono = Platform.select({ ios: 'Courier', android: 'monospace', default: 'Courier New' });
 
 export type BillOrder = {
+  orderId?: string;
   orderNumber: string;
   createdAt: string;
   tableLabel: string | null;
@@ -29,6 +30,7 @@ function Dashed() {
 export function BillPreviewSheet({ order, onClose }: { order: BillOrder; onClose: () => void }) {
   const { membership } = useAuth();
   const [printing, setPrinting] = useState(false);
+  const [copies, setCopies] = useState(0);
 
   const subtotalMinor = order.items.reduce((s, i) => s + i.lineTotalMinor, 0);
   const gstMinor = order.totalMinor - subtotalMinor;
@@ -62,6 +64,14 @@ export function BillPreviewSheet({ order, onClose }: { order: BillOrder; onClose
     if (!tenant) return;
     setPrinting(true);
     try {
+      // Count this print; anything after the first is stamped as a duplicate.
+      let copyNumber = 1;
+      if (order.orderId) {
+        const { data: count, error: logError } = await supabase.rpc('log_bill_print', { p_order_id: order.orderId });
+        if (logError) throw new Error(logError.message);
+        copyNumber = Number(count) || 1;
+        setCopies(copyNumber);
+      }
       const html = buildReceiptHtml({
         tenantName: tenant.name,
         tenantAddress: tenant.address,
@@ -75,6 +85,7 @@ export function BillPreviewSheet({ order, onClose }: { order: BillOrder; onClose
         gstPercent: tenant.gst_percent,
         gstMinor,
         totalMinor: order.totalMinor,
+        copyNumber,
       });
       await printHtml(html);
     } catch (e) {
@@ -120,6 +131,7 @@ export function BillPreviewSheet({ order, onClose }: { order: BillOrder; onClose
 
             <Dashed />
 
+            {copies > 1 ? <Text style={{ fontFamily: mono, fontSize: 12, fontWeight: '700', color: colors.ink900 }}>DUPLICATE COPY #{copies}</Text> : null}
             <Text style={{ fontFamily: mono, fontSize: 12, color: colors.ink700 }}>{metaLine}</Text>
 
             <Dashed />

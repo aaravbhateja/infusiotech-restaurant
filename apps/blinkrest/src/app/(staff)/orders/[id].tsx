@@ -338,6 +338,7 @@ function OrderDetailScreen() {
     {billOpen ? (
       <BillPreviewSheet
         order={{
+          orderId: order.id,
           orderNumber: order.order_number,
           createdAt: order.created_at,
           tableLabel: order.table?.label ?? null,

@@ -36,6 +36,7 @@ export function buildReceiptHtml(opts: {
   gstPercent: number;
   gstMinor: number;
   totalMinor: number;
+  copyNumber?: number;
 }) {
   const money = (minor: number) => `₹${(minor / 100).toFixed(2)}`;
   const metaLine = [
@@ -70,6 +71,7 @@ export function buildReceiptHtml(opts: {
   .line { border-top: 1px dashed #D9D3D0; margin: 10px 0; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   .total-row td { font-weight: bold; font-size: 14px; padding-top: 8px; border-top: 1px dashed #D9D3D0; }
+  .dup { text-align: center; font-weight: bold; letter-spacing: 1px; border: 1.5px solid #1B1716; padding: 4px; margin-bottom: 8px; }
   .footer { text-align: center; font-size: 11px; color: #4A4240; margin-top: 16px; }
   .footer b.blink { color: #1B1716; }
   .footer b.rest { color: #FF5A36; }
@@ -77,6 +79,7 @@ export function buildReceiptHtml(opts: {
 </style>
 </head>
 <body>
+  ${opts.copyNumber && opts.copyNumber > 1 ? `<div class="dup">DUPLICATE COPY #${opts.copyNumber}</div>` : ''}
   <div class="name-box"><span>${escapeHtml(opts.tenantName.toUpperCase())}</span></div>
   <p class="muted">
     ${[opts.tenantAddress, opts.gstin ? `GSTIN ${opts.gstin}` : null].filter((s): s is string => !!s).map(escapeHtml).join(' · ')}
