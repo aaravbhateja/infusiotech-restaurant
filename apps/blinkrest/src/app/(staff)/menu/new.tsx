@@ -30,6 +30,7 @@ function NewMenuItemScreen() {
   const [price, setPrice] = useState('');
   const [isVeg, setIsVeg] = useState(true);
   const [station, setStation] = useState('general');
+  const [prepMinutes, setPrepMinutes] = useState('');
   const [available, setAvailable] = useState(true);
   const [imagePath, setImagePath] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -100,6 +101,7 @@ function NewMenuItemScreen() {
       is_available: available,
       image_path: imagePath,
       station,
+      prep_minutes: prepMinutes ? Number(prepMinutes) : null,
     });
     setSaving(false);
     if (error) {
@@ -259,6 +261,19 @@ function NewMenuItemScreen() {
                 );
               })}
             </View>
+          </View>
+
+          <View style={{ gap: 8 }}>
+            <Text style={{ fontSize: 13, fontFamily: fonts.bodyBold, color: colors.ink900 }}>Prep time (minutes)</Text>
+            <TextInput
+              value={prepMinutes}
+              onChangeText={(t) => setPrepMinutes(t.replace(/[^0-9]/g, '').slice(0, 3))}
+              placeholder="Optional, e.g. 15"
+              placeholderTextColor={colors.ink500}
+              keyboardType="number-pad"
+              style={{ height: 48, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.inputBorder, paddingHorizontal: 16, color: colors.ink900 }}
+            />
+            <Text style={{ fontSize: 12, color: colors.ink500 }}>The kitchen is alerted when an order takes longer than this.</Text>
           </View>
         </View>
 

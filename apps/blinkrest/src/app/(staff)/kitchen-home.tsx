@@ -16,7 +16,7 @@ import { colors, fonts, radius } from '@/theme/tokens';
 import { tenantSubs, useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
 
 const DARK = { bg: '#141110', card: '#2A2422', text: '#FFFFFF', sub: '#C9BDB6' };
-const LATE_MINUTES = 10;
+const LATE_MINUTES = 20; // used when no dish on the ticket has a prep time
 
 function PulsingDot() {
   const pulse = useSharedValue(0.4);
@@ -27,7 +27,7 @@ function PulsingDot() {
   return <Animated.View style={[{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#FFFFFF' }, style]} />;
 }
 
-type Item = { item_name_snapshot: string; quantity: number; station: string; voided: boolean; added: boolean };
+type Item = { item_name_snapshot: string; quantity: number; station: string; voided: boolean; added: boolean; prep: number | null };
 type Ticket = {
   id: string;
   order_number: string;
@@ -73,13 +73,13 @@ export default function KitchenHome() {
       setTickets([]);
       return;
     }
-    const { data: items } = await supabase.from('order_items').select('order_id, round, item_name_snapshot, quantity, voided_at, added_after_kot, menu_item:menu_items(station)').in('order_id', list.map((o) => o.id));
+    const { data: items } = await supabase.from('order_items').select('order_id, round, item_name_snapshot, quantity, voided_at, added_after_kot, menu_item:menu_items(station, prep_minutes)').in('order_id', list.map((o) => o.id));
     setTickets(
       list.map((o) => ({
         ...o,
         items: (items ?? [])
           .filter((i) => i.order_id === o.id && i.round === o.current_round)
-          .map((i) => ({ item_name_snapshot: i.item_name_snapshot, quantity: i.quantity, station: (i.menu_item as any)?.station ?? 'general', voided: !!i.voided_at, added: !!i.added_after_kot })),
+          .map((i) => ({ item_name_snapshot: i.item_name_snapshot, quantity: i.quantity, station: (i.menu_item as any)?.station ?? 'general', voided: !!i.voided_at, added: !!i.added_after_kot, prep: (i.menu_item as any)?.prep_minutes ?? null })),
       })),
     );
   }, []);
@@ -165,7 +165,9 @@ export default function KitchenHome() {
         {visibleTickets.map((t, idx) => {
           const s = t.order_status;
           const minutesLate = Math.floor((now - new Date(t.round_started_at).getTime()) / 60000);
-          const isLate = minutesLate >= LATE_MINUTES;
+          const dishLimits = t.items.filter((i) => !i.voided && i.prep).map((i) => i.prep as number);
+          const limit = dishLimits.length > 0 ? Math.max(...dishLimits) : LATE_MINUTES;
+          const isLate = minutesLate >= limit;
           const head = isLate ? '#D9381A' : s === 'preparing' ? colors.saffron400 : colors.coral500;
           const btnLabel = s === 'accepted' ? 'Start cooking' : 'Mark ready';
           const btnIcon = s === 'accepted' ? 'flame' : 'bell';
